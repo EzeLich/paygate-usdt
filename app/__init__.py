@@ -1,0 +1,1 @@
+"""PayGate USDT gateway package."""
