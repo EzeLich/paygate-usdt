@@ -237,6 +237,33 @@ class PayGateClient:
             payload={"tx_hash": tx_hash},
         )
 
+    def get_receipt(self, invoice_id: str) -> dict[str, Any]:
+        return self._request(f"/api/v1/paygate/invoices/{invoice_id}/receipt", method="GET")
+
+    def build_payment_url(
+        self,
+        *,
+        merchant_wallet: str,
+        amount_usd: float,
+        network: str = "polygon",
+        title: str = "Instant Checkout",
+        redirect_url: str = "",
+        issue_pass: bool = False,
+    ) -> str:
+        import urllib.parse
+
+        qs = urllib.parse.urlencode(
+            {
+                "merchant": merchant_wallet.strip(),
+                "amount": round(float(amount_usd), 2),
+                "network": network.strip().lower(),
+                "title": title.strip(),
+                **({"redirect_url": redirect_url.strip()} if redirect_url.strip() else {}),
+                **({"issue_pass": 1} if issue_pass else {}),
+            }
+        )
+        return f"{self.base_url}/paygate/pay?{qs}"
+
 
 from .cli import handle_mcp_jsonrpc
 
