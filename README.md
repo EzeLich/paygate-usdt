@@ -14,6 +14,7 @@ No custodial processor holds your funds. No Stripe / Whop / bank account require
 - 🌐 **Live Cloud Sandbox & Demo:** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
 - 🤖 **Live Telegram VIP Bot Demo:** [@ChainGuardVaultBot (`?start=vip`)](https://t.me/ChainGuardVaultBot?start=vip)
 - 🧠 **Live MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/mcp` (`create_usdt_invoice`, `verify_usdt_invoice`)
+- 🛡️ **Sister 14-Tool Web3 Security & Vault Recovery MCP (`EzeLich/chainguard-mcp`):** [https://github.com/EzeLich/chainguard-mcp](https://github.com/EzeLich/chainguard-mcp)
 
 ---
 

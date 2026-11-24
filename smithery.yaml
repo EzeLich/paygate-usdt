@@ -1,0 +1,14 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      baseUrl:
+        type: string
+        default: https://chainguard-studio-production.up.railway.app
+        description: Optional self-hosted PayGate server URL
+  commandFunction: |-
+    (config) => ({
+      command: 'paygate-usdt',
+      args: ['mcp', '--base-url', (config && config.baseUrl) || 'https://chainguard-studio-production.up.railway.app']
+    })
