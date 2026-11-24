@@ -5,8 +5,11 @@ without banks, Stripe, Whop, or monotributo, and auto-manages 1-use invites + ex
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import html
 import json
+import os
 import re
 import urllib.error
 import urllib.request
@@ -18,11 +21,35 @@ from .ledger import StudioLedger
 from .onchain_verifier import OnChainPaymentVerifier
 
 SUPPORTED_NETWORKS: dict[str, dict[str, str]] = {
-    "polygon": {"label": "Polygon (USDT / USDC — comision ~$0.01)", "tokens": "USDT o USDC"},
-    "bsc": {"label": "BNB Smart Chain BEP20 (USDT / USDC)", "tokens": "USDT o USDC"},
-    "arbitrum": {"label": "Arbitrum One (USDT / USDC)", "tokens": "USDT o USDC"},
-    "base": {"label": "Base (USDC / USDT)", "tokens": "USDC o USDT"},
-    "solana": {"label": "Solana (USDC / USDT — Phantom)", "tokens": "USDC o USDT"},
+    "polygon": {"label": "Polygon (USDT / USDC — ~$0.01 fee)", "tokens": "USDT or USDC"},
+    "bsc": {"label": "BNB Smart Chain BEP20 (USDT / USDC)", "tokens": "USDT or USDC"},
+    "arbitrum": {"label": "Arbitrum One (USDT / USDC)", "tokens": "USDT or USDC"},
+    "base": {"label": "Base (USDC / USDT)", "tokens": "USDC or USDT"},
+    "solana": {"label": "Solana (USDC / USDT — Phantom)", "tokens": "USDC or USDT"},
+    "ethereum": {"label": "Ethereum Mainnet (USDC / USDT)", "tokens": "USDC or USDT"},
+}
+
+PAYGATE_B2B_PACKAGES: dict[str, dict[str, Any]] = {
+    "turnkey_199": {
+        "package_id": "turnkey_199",
+        "name_en": "Turnkey VIP Gate Deployment (24h)",
+        "name_es": "Despliegue Llave en Mano VIP Gate (24h)",
+        "full_price_usd": 199.0,
+        "min_deposit_usd": 99.0,
+        "delivery": "24 hours",
+        "summary_en": "We create & configure your branded Telegram payment bot, multi-chain USDT/USDC wallet rules, private channel auto-kick permissions, and live test payment end-to-end.",
+        "summary_es": "Creamos y configuramos tu bot Telegram con tu marca, cobro USDT/USDC multi-red, permisos de invitación/expulsión en tu canal y prueba en vivo punta a punta.",
+    },
+    "custom_499": {
+        "package_id": "custom_499",
+        "name_en": "Custom Crypto Checkout + Bot / Exchange Automation",
+        "name_es": "Bot Cripto a Medida + Automatización API / Exchange",
+        "full_price_usd": 499.0,
+        "min_deposit_usd": 249.0,
+        "delivery": "3-5 days",
+        "summary_en": "Bespoke multi-chain USDT/USDC checkout + custom Python backend: webhook CRM/SaaS fulfillment, Discord/Telegram roles, or Binance/Bitget/BingX signal/alert automation.",
+        "summary_es": "Checkout USDT/USDC multi-red + backend Python a medida: integración webhook con tu SaaS/CRM, roles Discord/Telegram o automatización Binance/Bitget/BingX.",
+    },
 }
 
 EVM_TX_RE = re.compile(r"\b0x[a-fA-F0-9]{64}\b")
@@ -381,6 +408,232 @@ def sweep_expired_paygate_members(ledger: StudioLedger) -> dict[str, Any]:
     return {"checked": processed, "kicked": kicked, "timestamp": now_iso}
 
 
+def notify_owner_b2b_event(message: str) -> bool:
+    bot_tok = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    owner_chat = (os.getenv("OWNER_TELEGRAM_CHAT_ID") or "").strip()
+    if not bot_tok or not owner_chat:
+        return False
+    ok, _ = tg_call(bot_tok, "sendMessage", {"chat_id": owner_chat, "text": message[:3900]})
+    return ok
+
+
+def verify_paygate_b2b_deposit(
+    *,
+    order_id: str,
+    network: str,
+    tx_hash: str,
+    ledger: StudioLedger,
+    verifier: OnChainPaymentVerifier,
+) -> dict[str, Any]:
+    order = ledger.get_paygate_b2b_order(order_id)
+    if not order:
+        return {"ok": False, "error": "B2B order not found.", "status_code": 404}
+    net = (network or "").strip().lower()
+    if net not in SUPPORTED_NETWORKS:
+        return {"ok": False, "error": f"Unsupported network: {network}", "status_code": 400}
+    tx = (tx_hash or "").strip()
+    if ledger.is_tx_used(tx):
+        return {"ok": False, "error": "Transaction hash already redeemed.", "status_code": 402}
+    res = verifier.verify(tx_hash=tx, network=net, min_amount_usd=float(order["min_deposit_usd"]))
+    if not res.verified:
+        return {"ok": False, "error": res.reason or "Transaction not verified.", "status_code": 402}
+    ledger.record_payment(
+        tx_hash=tx,
+        network=res.network,
+        token=res.token,
+        amount_usd=float(res.amount_usd),
+        recipient=res.recipient,
+        tier_id=f"paygate_b2b:{order['package_id']}",
+        verification_mode="onchain_rpc",
+        raw_proof=res.raw_proof,
+        sender=res.sender,
+    )
+    updated = ledger.mark_paygate_b2b_order_paid(
+        order["order_id"],
+        tx_hash=tx,
+        network=res.network,
+        paid_amount_usd=float(res.amount_usd),
+    )
+    status_lbl = updated["status"] if updated else order["status"]
+    ledger.record_event(
+        "PayGateB2B",
+        status_lbl,
+        f"{order['order_id']} ({order['package_id']}) ${res.amount_usd:.2f} {res.token} via {res.network}",
+    )
+    notify_owner_b2b_event(
+        f"💰 PAYGATE B2B ORDER VERIFIED\nOrder: {order['order_id']}\nPackage: {order['package_name']}\nClient: {order['client_name']} ({order['contact_handle']})\nPaid: ${res.amount_usd:.2f} {res.token} on {res.network}\nTx: {tx}"
+    )
+    return {
+        "ok": True,
+        "order": updated,
+        "payment": {"amount_usd": res.amount_usd, "token": res.token, "network": res.network},
+    }
+
+
+def sign_paygate_webhook(payload_bytes: bytes, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+
+
+def dispatch_invoice_webhook(invoice: dict[str, Any]) -> bool:
+    url = str(invoice.get("webhook_url") or "").strip()
+    if not url.startswith(("https://", "http://")):
+        return False
+    event_payload = {
+        "event": "invoice.paid",
+        "invoice_id": invoice["invoice_id"],
+        "status": "paid",
+        "amount_usd": invoice["amount_usd"],
+        "paid_amount_usd": invoice["paid_amount_usd"],
+        "token": invoice["token"],
+        "network": invoice["network"],
+        "merchant_wallet": invoice["merchant_wallet"],
+        "tx_hash": invoice["tx_hash"],
+        "payer": invoice["payer"],
+        "paid_at": invoice["paid_at"],
+        "metadata": invoice.get("metadata", {}),
+    }
+    raw = json.dumps(event_payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    headers = {"Content-Type": "application/json", "User-Agent": "PayGateUSDT/2.0", "X-PayGate-Event": "invoice.paid"}
+    sec = str(invoice.get("webhook_secret") or "").strip()
+    if sec:
+        headers["X-PayGate-Signature"] = f"sha256={sign_paygate_webhook(raw, sec)}"
+    req = urllib.request.Request(url, data=raw, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=8):
+            return True
+    except Exception:
+        return False
+
+
+def verify_and_settle_invoice(
+    *,
+    invoice_id: str,
+    tx_hash: str,
+    ledger: StudioLedger,
+    verifier: OnChainPaymentVerifier,
+) -> dict[str, Any]:
+    inv = ledger.get_paygate_invoice(invoice_id)
+    if not inv:
+        return {"ok": False, "status_code": 404, "error": "Invoice not found."}
+    if inv["status"] == "paid":
+        return {"ok": True, "invoice": inv, "already_paid": True}
+    tx = (tx_hash or "").strip()
+    if ledger.is_tx_used(tx):
+        return {"ok": False, "status_code": 402, "error": "Transaction hash already redeemed."}
+    res = verifier.verify(
+        network=inv["network"],
+        tx_hash=tx,
+        min_amount_usd=float(inv["amount_usd"]),
+        expected_recipient=inv["merchant_wallet"],
+    )
+    if not res.verified:
+        return {"ok": False, "status_code": 402, "error": res.reason or "Transaction verification failed."}
+    ledger.record_payment(
+        tx_hash=tx,
+        network=res.network,
+        token=res.token,
+        amount_usd=float(res.amount_usd),
+        recipient=res.recipient,
+        tier_id=f"paygate_invoice:{inv['invoice_id']}",
+        verification_mode="onchain_rpc",
+        raw_proof=res.raw_proof,
+        sender=res.sender,
+    )
+    updated = ledger.mark_paygate_invoice_paid(
+        inv["invoice_id"],
+        tx_hash=tx,
+        paid_amount_usd=float(res.amount_usd),
+        token=res.token,
+        payer=res.sender,
+    )
+    if updated:
+        dispatch_invoice_webhook(updated)
+    ledger.record_event(
+        "PayGateInvoice",
+        "invoice_paid",
+        f"{inv['invoice_id']} ${res.amount_usd:.2f} {res.token} on {res.network}",
+    )
+    return {"ok": True, "invoice": updated or inv}
+
+
+def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
+    inv_id = html.escape(invoice["invoice_id"])
+    title = html.escape(invoice["title"])
+    net = html.escape(invoice["network"].upper())
+    wallet = html.escape(invoice["merchant_wallet"])
+    amt = f"{float(invoice['amount_usd']):.2f}"
+    is_paid = invoice.get("status") == "paid"
+    badge_bg = "rgba(16,185,129,.16)" if is_paid else "rgba(245,158,11,.15)"
+    badge_fg = "#6ee7b7" if is_paid else "#fcd34d"
+    badge_bd = "#10b981" if is_paid else "#f59e0b"
+    status_txt = "PAID · CONFIRMED ON-CHAIN" if is_paid else "PENDING ON-CHAIN TRANSFER"
+    tx_esc = html.escape(invoice.get("tx_hash") or "")
+    redir = html.escape(invoice.get("redirect_url") or "")
+    paid_block = (
+        f"""<div class="card" style="background:#052e16;border-color:#10b981;margin-top:16px;">
+          <div style="font-weight:800;color:#6ee7b7;">✅ Payment Confirmed On-Chain</div>
+          <div style="font-size:.88rem;margin-top:6px;">TX: <code>{tx_esc}</code></div>
+          {f'<div style="margin-top:10px;"><a class="btn" href="{redir}">Continue to Merchant →</a></div>' if redir else ''}
+        </div>"""
+        if is_paid
+        else f"""<div class="card" style="margin-top:16px;">
+          <label>1. Send exact amount (USDT or USDC on <strong>{net}</strong>) directly to merchant wallet:</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+            <code id="mWal" style="flex:1;padding:10px;display:block;">{wallet}</code>
+            <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
+          </div>
+          <label style="margin-top:14px;">2. Paste transaction hash after sending:</label>
+          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+            <input id="invTx" style="flex:1;min-width:220px;" placeholder="0x... or Solana signature"/>
+            <button class="btn" onclick="verifyInv()">Verify On-Chain Payment</button>
+          </div>
+          <div id="invMsg" style="margin-top:10px;font-size:.9rem;"></div>
+        </div>"""
+    )
+    return f"""<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pay ${amt} USDT — {title} | PayGate USDT</title>
+<style>
+  *{{box-sizing:border-box}} body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,sans-serif;line-height:1.55}}
+  .wrap{{max-width:660px;margin:0 auto;padding:32px 16px 64px}}
+  .card{{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px}}
+  .badge{{display:inline-block;padding:4px 11px;border-radius:999px;background:{badge_bg};border:1px solid {badge_bd};color:{badge_fg};font-size:.76rem;font-weight:800}}
+  .btn{{display:inline-block;background:#10b981;color:#02160f;font-weight:800;padding:10px 18px;border-radius:10px;border:none;cursor:pointer;text-decoration:none}}
+  .btn2{{display:inline-block;background:#1e293b;color:#f8fafc;font-weight:700;padding:10px 14px;border-radius:10px;border:1px solid #334155;cursor:pointer;text-decoration:none}}
+  input{{padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#070b14;color:#f8fafc;font-size:.92rem}}
+  label{{display:block;font-size:.84rem;color:#cbd5e1;font-weight:700}}
+  code{{background:#020617;padding:4px 8px;border-radius:6px;color:#6ee7b7;font-size:.84rem;word-break:break-all}}
+</style></head><body><div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+    <span class="badge">{status_txt}</span>
+    <span style="font-size:.82rem;color:#94a3b8;">Invoice <code>{inv_id}</code> · {net}</span>
+  </div>
+  <div class="card">
+    <div style="color:#94a3b8;font-size:.86rem;">NON-CUSTODIAL STABLECOIN CHECKOUT</div>
+    <h1 style="margin:6px 0 8px;font-size:1.55rem;">{title}</h1>
+    <div style="font-size:2.1rem;font-weight:900;color:#10b981;">${amt} <span style="font-size:.95rem;color:#94a3b8;">USDT / USDC ({net})</span></div>
+  </div>
+  {paid_block}
+  <div style="margin-top:20px;text-align:center;font-size:.8rem;color:#64748b;">
+    Powered by <a href="https://github.com/EzeLich/paygate-usdt" target="_blank" style="color:#38bdf8;">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate" style="color:#94a3b8;">Create your own checkout</a>
+  </div>
+</div>
+<script>
+async function verifyInv() {{
+  const m = document.getElementById('invMsg');
+  m.style.color = '#94a3b8';
+  m.textContent = 'Checking RPC finality...';
+  const r = await fetch('/api/v1/paygate/invoices/{inv_id}/verify', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{ tx_hash: document.getElementById('invTx').value.trim() }})
+  }});
+  const d = await r.json();
+  if (!r.ok) {{ m.style.color = '#fca5a5'; m.textContent = d.detail || 'Not verified yet.'; return; }}
+  location.reload();
+}}
+</script></body></html>"""
+
+
 def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "en") -> str:
     evm_addr = html.escape(StudioConfig.PHANTOM_EVM_ADDRESS)
     sol_addr = html.escape(StudioConfig.PHANTOM_SOL_ADDRESS)
@@ -445,18 +698,29 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
 <body><div class="wrap">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <span class="badge">{t['badge']}</span>
-    <div style="display:flex;gap:8px;">
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/poly">🐋 PolyPulse Whale Radar</a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="https://github.com/EzeLich/paygate-usdt" target="_blank">⭐ GitHub Open-Source SDK &amp; API</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#invoice-link">{'🔗 Instant Invoice' if not is_es else '🔗 Link de Cobro'}</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#demo">{'⚡ Live Demo' if not is_es else '⚡ Demo en Vivo'}</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#b2b">{'🏢 Done-For-You B2B' if not is_es else '🏢 Setup Llave en Mano'}</a>
       <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/paygate?lang={alt_lang}">🌐 {alt_lbl}</a>
     </div>
+  </div>
+  <div style="margin-top:14px;background:#0b1325;border:1px solid #1e3a5f;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div style="font-size:.88rem;color:#cbd5e1;">
+      <strong>Open-Source Python SDK + x402 + Signed Webhooks + MCP Server:</strong>
+      Deploy <code>paygate-usdt</code> self-hosted (MIT) or use our managed cloud &amp; B2B integration.
+    </div>
+    <a class="btn2" style="padding:7px 13px;font-size:.82rem;border-color:#38bdf8;color:#7dd3fc;" href="https://github.com/EzeLich/paygate-usdt" target="_blank">github.com/EzeLich/paygate-usdt →</a>
   </div>
   <h1>{t['h1']}</h1>
   <p class="sub">{t['sub']}</p>
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-    <a class="btn" href="#setup">{t['cta1']}</a>
+    <a class="btn" href="#b2b">{'🏢 Deploy For My Business ($199+)' if not is_es else '🏢 Implementar para mi Negocio ($199+)'}</a>
+    <a class="btn2" href="#setup">{t['cta1']}</a>
+    <a class="btn2" href="#demo">{'🧪 Interactive Preview (10s)' if not is_es else '🧪 Probar Flujo Interactivo (10s)'}</a>
     <a class="btn2" href="https://t.me/ChainGuardVaultBot?start=vip" target="_blank">{t['cta2']}</a>
-    <a class="btn2" href="#upgrade">{t['cta3']}</a>
   </div>
 
   <div class="grid">
@@ -475,6 +739,43 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
       <h3 style="margin:6px 0;">{t['c3t']}</h3>
       <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c3b']}</p>
     </div>
+  </div>
+
+  <div class="card" id="invoice-link" style="margin-top:20px;border-color:#38bdf8;">
+    <h2 style="margin:0 0 6px;">{'🔗 Create Instant USDT / USDC Payment Link (No Bot Required)' if not is_es else '🔗 Crear Link de Cobro Instantáneo en USDT / USDC (Sin Bot)'}</h2>
+    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Generate a hosted non-custodial invoice page + optional HMAC-SHA256 webhook callback in 5 seconds. Funds settle 100% directly to your wallet.' if not is_es else 'Generá un link de cobro directo a tu wallet + webhook firmado HMAC-SHA256 en 5 segundos, sin custodia ni intermediarios.'}</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
+      <div>
+        <label>{'Invoice Title' if not is_es else 'Concepto / Producto'}</label>
+        <input id="invTitle" placeholder="SaaS License / Consulting / VIP Access"/>
+      </div>
+      <div>
+        <label>{'Amount (USDT / USDC)' if not is_es else 'Monto (USDT / USDC)'}</label>
+        <input id="invAmt" type="number" step="0.5" value="50"/>
+      </div>
+      <div>
+        <label>{'Network (0% fee)' if not is_es else 'Red (0% comisión)'}</label>
+        <select id="invNet">
+          <option value="polygon">Polygon</option>
+          <option value="bsc">BSC BEP20</option>
+          <option value="base">Base</option>
+          <option value="arbitrum">Arbitrum</option>
+          <option value="solana">Solana</option>
+          <option value="ethereum">Ethereum</option>
+        </select>
+      </div>
+      <div>
+        <label>{'Merchant Wallet (0x... or Solana)' if not is_es else 'Tu Wallet Receptora (0x... o Solana)'}</label>
+        <input id="invWallet" placeholder="0x... or Solana address"/>
+      </div>
+    </div>
+    <label>{'Webhook Callback URL (optional — receives signed X-PayGate-Signature)' if not is_es else 'URL Webhook (opcional — recibe evento invoice.paid firmado)'}</label>
+    <input id="invHook" placeholder="https://yourapp.com/webhooks/paygate"/>
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="createInstantInvoice()">{'⚡ Generate Hosted Checkout URL' if not is_es else '⚡ Generar Link de Cobro'}</button>
+      <span id="invCreateMsg" style="font-size:.9rem;"></span>
+    </div>
+    <div id="invCreateOut" style="margin-top:12px;"></div>
   </div>
 
   <div class="card" id="setup" style="margin-top:20px;border-color:#10b981;">
@@ -519,6 +820,76 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
       <span id="setupMsg" style="font-size:.9rem;"></span>
     </div>
     <div id="setupResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" id="demo" style="margin-top:20px;border-color:#38bdf8;">
+    <h2 style="margin:0 0 6px;">{'🧪 Interactive Buyer Experience (No Bot Token Needed)' if not is_es else '🧪 Simulador del Flujo de Compra (Sin Token previo)'}</h2>
+    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Click below to preview the exact non-custodial flow your paying members see inside Telegram:' if not is_es else 'Hacé clic abajo para ver exactamente lo que vive un miembro al pagar en tu comunidad VIP:'}</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">
+      <div>
+        <label>{'Demo Plan' if not is_es else 'Plan Demo'}</label>
+        <select id="demoPlan">
+          <option value="29">{'VIP Monthly (30d) — $29 USDT' if not is_es else 'VIP Mensual (30d) — $29 USDT'}</option>
+          <option value="79">{'VIP Lifetime — $79 USDT' if not is_es else 'VIP Vitalicio — $79 USDT'}</option>
+        </select>
+      </div>
+      <div>
+        <label>{'Buyer Chain' if not is_es else 'Red del Comprador'}</label>
+        <select id="demoChain">
+          <option value="Polygon">Polygon (USDT / USDC)</option>
+          <option value="BSC BEP20">BNB Smart Chain BEP20 (USDT / USDC)</option>
+          <option value="Base">Base (USDC / USDT)</option>
+          <option value="Arbitrum">Arbitrum One (USDT / USDC)</option>
+          <option value="Solana">Solana (USDC / USDT)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn2" style="width:100%;border-color:#38bdf8;color:#7dd3fc;" onclick="runDemoFlow()">{'▶ Simulate Instant Settlement' if not is_es else '▶ Simular Cobro + Acceso VIP'}</button>
+      </div>
+    </div>
+    <div id="demoOutput" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" id="b2b" style="margin-top:20px;border-color:#f59e0b;">
+    <span class="badge" style="border-color:#f59e0b;color:#fcd34d;background:rgba(245,158,11,.12);">{'DONE-FOR-YOU B2B INFRASTRUCTURE' if not is_es else 'IMPLEMENTACIÓN B2B LLAVE EN MANO'}</span>
+    <h2 style="margin:10px 0 6px;">{'🏢 Want Us to Deploy & Customize Your Payment Infrastructure?' if not is_es else '🏢 ¿Querés que lo dejemos funcionando a medida para tu negocio?'}</h2>
+    <p style="margin:0 0 12px;font-size:.9rem;color:#94a3b8;">{'Built for paid Telegram signal/alpha rooms, SaaS teams blocked by Stripe/Whop, and crypto businesses requiring custom bot/API automation. Pay directly in USDT/USDC with 50% kickoff deposit.' if not is_es else 'Ideal para comunidades VIP de trading/educación, SaaS sin Stripe/Whop o empresas cripto que necesitan bots y automatización Python a medida. Cobro directo en USDT/USDC con seña del 50%.'}</p>
+    <div class="grid" style="margin:12px 0;">
+      <div class="card" style="background:#070b14;border-color:#f59e0b;">
+        <div style="font-weight:800;color:#fcd34d;">{'TURNKEY VIP GATE (24H)' if not is_es else 'VIP GATE LLAVE EN MANO (24H)'}</div>
+        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$199 <span style="font-size:.85rem;color:#94a3b8;">USDT ({'50% deposit: $99' if not is_es else 'seña 50%: $99'})</span></div>
+        <p style="font-size:.86rem;color:#94a3b8;">{PAYGATE_B2B_PACKAGES['turnkey_199']['summary_es' if is_es else 'summary_en']}</p>
+      </div>
+      <div class="card" style="background:#070b14;border-color:#38bdf8;">
+        <div style="font-weight:800;color:#7dd3fc;">{'CUSTOM BOT + API / EXCHANGE' if not is_es else 'BOT A MEDIDA + API / EXCHANGE'}</div>
+        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$499 <span style="font-size:.85rem;color:#94a3b8;">USDT ({'50% deposit: $249' if not is_es else 'seña 50%: $249'})</span></div>
+        <p style="font-size:.86rem;color:#94a3b8;">{PAYGATE_B2B_PACKAGES['custom_499']['summary_es' if is_es else 'summary_en']}</p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+      <div>
+        <label>{'Solution Package' if not is_es else 'Solución a contratar'}</label>
+        <select id="b2bPkg">
+          <option value="turnkey_199">{'Turnkey VIP Gate Setup — $199 USDT ($99 deposit)' if not is_es else 'VIP Gate Llave en Mano — $199 USDT ($99 seña)'}</option>
+          <option value="custom_499">{'Custom Crypto Bot + Exchange/API — $499 USDT ($249 deposit)' if not is_es else 'Bot Cripto + API/Exchange a Medida — $499 USDT ($249 seña)'}</option>
+        </select>
+      </div>
+      <div>
+        <label>{'Your Name / Brand' if not is_es else 'Tu Nombre / Marca'}</label>
+        <input id="b2bName" placeholder="e.g. Alpha Desk / Studio"/>
+      </div>
+      <div>
+        <label>{'Telegram @handle or Email' if not is_es else 'Tu @usuario Telegram o Email'}</label>
+        <input id="b2bContact" placeholder="@yourhandle or founder@domain.com"/>
+      </div>
+    </div>
+    <label>{'Project URL / Channel & Integration Scope' if not is_es else 'Link o detalle de qué necesitás automatizar'}</label>
+    <textarea id="b2bScope" rows="2" placeholder="{'e.g. 400-member VIP Telegram channel migrating off manual TRC20/Whop + webhook to Notion/CRM' if not is_es else 'Ej: canal VIP de señales cobrando USDT manual, quiero bot + expulsión automática + alertas'}"></textarea>
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn" style="background:#f59e0b;color:#1f1300;" onclick="createB2BOrder()">{'🚀 Request Deployment & Get USDT Invoice' if not is_es else '🚀 Reservar Implementación y Ver Factura USDT'}</button>
+      <span id="b2bMsg" style="font-size:.9rem;"></span>
+    </div>
+    <div id="b2bOrderBox" style="margin-top:12px;"></div>
   </div>
 
   <div class="card" id="upgrade" style="margin-top:18px;">
@@ -575,6 +946,99 @@ async function crearBot() {{
     <div>✅ <strong>@${{d.bot.bot_username}}</strong> is live: <a style="color:#6ee7b7;font-weight:800;" href="https://t.me/${{d.bot.bot_username}}" target="_blank">t.me/${{d.bot.bot_username}}</a></div>
     <div style="margin-top:8px;">🔐 <strong>Save your private Admin Panel link:</strong><br/><code>${{panelUrl}}</code></div>
     <div style="margin-top:8px;"><a class="btn" href="${{panelUrl}}">Open Admin Panel →</a></div>
+  </div>`;
+}}
+
+function runDemoFlow() {{
+  const amt = document.getElementById('demoPlan').value;
+  const ch = document.getElementById('demoChain').value;
+  const out = document.getElementById('demoOutput');
+  out.innerHTML = `<div style="background:#070b14;border:1px solid #38bdf8;border-radius:10px;padding:14px;font-size:.88rem;">
+    <div><strong>Step 1 (Buyer in Telegram):</strong> Sends <code>/start</code> → selects <strong>$${{amt}} USDT</strong> via <strong>${{ch}}</strong>.</div>
+    <div style="margin-top:6px;"><strong>Step 2 (Direct Wallet Settlement):</strong> Buyer transfers $${{amt}} straight to <em>your wallet</em> (0% fee held by PayGate) and pastes TX hash.</div>
+    <div style="margin-top:6px;"><strong>Step 3 (RPC Verified in ~2s):</strong> Anti-replay check passes → Bot issues 1-use invite link <code>t.me/+singleUse7x9K</code> (<code>member_limit=1</code>) + schedules auto-kick on expiry.</div>
+  </div>`;
+}}
+
+async function createB2BOrder() {{
+  const msg = document.getElementById('b2bMsg');
+  const box = document.getElementById('b2bOrderBox');
+  msg.className = '';
+  msg.textContent = 'Creating order...';
+  const r = await fetch('/api/v1/paygate/b2b-order', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{
+      package_id: document.getElementById('b2bPkg').value,
+      client_name: document.getElementById('b2bName').value.trim(),
+      contact_handle: document.getElementById('b2bContact').value.trim(),
+      requirements: document.getElementById('b2bScope').value.trim()
+    }})
+  }});
+  const d = await r.json();
+  if (!r.ok) {{
+    msg.className = 'err';
+    msg.textContent = d.detail || 'Validation error.';
+    return;
+  }}
+  msg.className = 'ok';
+  msg.textContent = 'Order created: ' + d.order.order_id;
+  const ord = d.order;
+  box.innerHTML = `<div class="card" style="background:#070b14;border-color:#f59e0b;">
+    <div><strong>Order ID:</strong> <code>${{ord.order_id}}</code> · <strong>${{ord.package_name}}</strong></div>
+    <div style="margin-top:6px;font-size:.88rem;">Send <strong>$${{ord.min_deposit_usd}} USDT/USDC</strong> (50% deposit) or full <strong>$${{ord.full_price_usd}} USDT/USDC</strong>:</div>
+    <div style="margin-top:6px;font-size:.84rem;">• EVM (Polygon / BSC / Arbitrum / Base / ETH): <code>${{d.wallets.evm}}</code></div>
+    <div style="margin-top:4px;font-size:.84rem;">• Solana (SPL USDC/USDT): <code>${{d.wallets.solana}}</code></div>
+    <div style="display:grid;grid-template-columns:160px 1fr auto;gap:8px;margin-top:10px;">
+      <select id="b2bNet"><option value="polygon">Polygon</option><option value="bsc">BSC BEP20</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="solana">Solana</option><option value="ethereum">Ethereum</option></select>
+      <input id="b2bTx" placeholder="Paste TX Hash (0x... or Solana signature)"/>
+      <button class="btn" onclick="verifyB2BOrder('${{ord.order_id}}')">Verify Deposit</button>
+    </div>
+    <div id="b2bVerifyMsg" style="margin-top:8px;font-size:.88rem;"></div>
+  </div>`;
+}}
+
+async function verifyB2BOrder(orderId) {{
+  const vm = document.getElementById('b2bVerifyMsg');
+  vm.className = '';
+  vm.textContent = 'Verifying on-chain...';
+  const r = await fetch('/api/v1/paygate/b2b-verify', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{
+      order_id: orderId,
+      network: document.getElementById('b2bNet').value,
+      tx_hash: document.getElementById('b2bTx').value.trim()
+    }})
+  }});
+  const d = await r.json();
+  if (!r.ok) {{
+    vm.className = 'err';
+    vm.textContent = d.detail || 'TX verification failed.';
+    return;
+  }}
+  vm.className = 'ok';
+  vm.textContent = '✅ Deposit verified on-chain! Status: ' + d.order.status + '. Delivery kickoff confirmed.';
+}}
+
+async function createInstantInvoice() {{
+  const m = document.getElementById('invCreateMsg');
+  const out = document.getElementById('invCreateOut');
+  m.className = ''; m.textContent = 'Creating invoice...';
+  const r = await fetch('/api/v1/paygate/invoices', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{
+      title: document.getElementById('invTitle').value.trim() || 'Digital Service',
+      amount_usd: parseFloat(document.getElementById('invAmt').value || '50'),
+      network: document.getElementById('invNet').value,
+      merchant_wallet: document.getElementById('invWallet').value.trim(),
+      webhook_url: document.getElementById('invHook').value.trim()
+    }})
+  }});
+  const d = await r.json();
+  if (!r.ok) {{ m.className = 'err'; m.textContent = d.detail || 'Error creating invoice.'; return; }}
+  m.className = 'ok'; m.textContent = 'Invoice created!';
+  out.innerHTML = `<div class="card" style="background:#052e16;border-color:#10b981;">
+    <div>✅ <strong>Checkout Link Ready:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a></div>
+    <div style="margin-top:6px;font-size:.84rem;">ID: <code>${{d.invoice.invoice_id}}</code></div>
   </div>`;
 }}
 </script></body></html>"""
