@@ -284,3 +284,39 @@ def test_stdio_mcp_jsonrpc_and_cli(monkeypatch, capsys):
     out_json = json.loads(capsys.readouterr().out)
     assert out_json["checkout_url"].endswith("/inv_cli1")
 
+
+def test_stateless_payment_url_receipt_and_widget():
+    from app.paygate import build_invoice_receipt, render_paygate_widget_js
+
+    client = PayGateClient("https://chainguard-studio-production.up.railway.app")
+    url = client.build_payment_url(
+        merchant_wallet="0x3333333333333333333333333333333333333333",
+        amount_usd=9.0,
+        network="base",
+        title="Unlimited MCP Pass",
+        issue_pass=True,
+    )
+    assert "/paygate/pay?" in url
+    assert "issue_pass=1" in url
+    assert "network=base" in url
+
+    rec = build_invoice_receipt(
+        {
+            "invoice_id": "inv_test99",
+            "status": "paid",
+            "title": "Unlimited MCP Pass",
+            "amount_usd": 9.0,
+            "paid_amount_usd": 9.0,
+            "token": "USDC",
+            "network": "base",
+            "merchant_wallet": "0x3333333333333333333333333333333333333333",
+            "payer": "0x1111111111111111111111111111111111111111",
+            "tx_hash": "0x" + "ee" * 32,
+            "paid_at": "2026-11-24T06:00:00+00:00",
+        }
+    )
+    assert len(rec["receipt_sha256"]) == 64
+    assert rec["explorer_url"].startswith("https://basescan.org/tx/")
+    js = render_paygate_widget_js("https://chainguard-studio-production.up.railway.app")
+    assert "data-paygate-merchant" in js
+
