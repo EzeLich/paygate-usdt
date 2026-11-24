@@ -1,28 +1,18 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.EzeLich/paygate-usdt",
-  "title": "PayGate USDT — Non-Custodial Stablecoin Payment Gateway & x402 MCP Server",
-  "description": "Self-hosted & cloud non-custodial USDT/USDC payment gateway across 6 chains with recurring SaaS subscriptions, HMAC-SHA256 webhooks, HTTP 402 paywall, Telegram VIP bot, and MCP tools.",
-  "version": "2.3.0",
+  "title": "PayGate USDT Payment Gateway MCP",
+  "description": "Non-custodial multi-chain USDT/USDC payment gateway, recurring subscriptions & x402 MCP tools.",
+  "version": "2.3.1",
+  "websiteUrl": "https://chainguard-studio-production.up.railway.app/paygate",
   "repository": {
     "url": "https://github.com/EzeLich/paygate-usdt",
     "source": "github"
   },
-  "websiteUrl": "https://chainguard-studio-production.up.railway.app/paygate",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://chainguard-studio-production.up.railway.app/mcp"
-    }
-  ],
-  "packages": [
-    {
-      "registryType": "pypi",
-      "identifier": "paygate-usdt",
-      "version": "2.3.0",
-      "transport": {
-        "type": "stdio"
-      }
+      "url": "https://chainguard-studio-production.up.railway.app/paygate/mcp"
     }
   ]
 }
