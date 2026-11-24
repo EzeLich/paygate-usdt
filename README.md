@@ -140,7 +140,28 @@ Or connect PayGate USDT as a local Stdio MCP server (`mcpServers` config):
 }
 ```
 
-### 5. Runnable Examples & Docker
+### 5. Runnable Examples, 1-Line Embed Widget & Docker
+
+Add a non-custodial USDT/USDC pay button to **any static site, GitHub README, or Markdown page** in 1 URL or 1 `<script>` tag:
+
+```html
+<a data-paygate-merchant="0xYourWallet" data-paygate-amount="29" data-paygate-network="polygon" data-paygate-title="Pro Access">
+  Pay $29 USDT
+</a>
+<script src="https://chainguard-studio-production.up.railway.app/paygate/widget.js"></script>
+```
+
+Or generate a stateless 1-click checkout URL directly in Python:
+
+```python
+from paygate_sdk import PayGateClient
+url = PayGateClient().build_payment_url(
+    merchant_wallet="0xYourWallet",
+    amount_usd=29.0,
+    network="polygon",
+    title="Pro Plan (30d)",
+)
+```
 
 - [`examples/fastapi_x402_demo.py`](examples/fastapi_x402_demo.py) — FastAPI paywall route protected by `@require_usdt_payment`
 - [`examples/webhook_receiver_demo.py`](examples/webhook_receiver_demo.py) — FastAPI receiver verifying `X-PayGate-Signature` (`HMAC-SHA256`)
@@ -164,16 +185,18 @@ Zero external API keys or private wallet keys are required to run the test suite
 
 ---
 
-## Hosted Cloud, Done-For-You B2B Deployment & Custom Bots
+## Hosted Cloud, 1-Click Passes & Done-For-You B2B Deployment
 
-Want this running for your business without touching servers, RPC failovers, or webhook glue?
+Want this running for your business without touching servers, RPC failovers, or webhook glue? Click any instant non-custodial checkout badge below (supports **1-Click MetaMask / Rabby / Phantom Browser Pay** + automatic SHA-256 Receipt):
 
-| Option | Price | What You Get |
+| Option | Price | Instant 1-Click Checkout / Action |
 |---|---|---|
 | **Open-Source Self-Hosted (`MIT`)** | **$0** | Clone this repo, run with FastAPI/uvicorn + `.env`, 0% fees |
-| **Managed Cloud VIP Bot** | **$29 USDT/mo** (7-day free trial) | Instant 60s setup on [PayGate Cloud](https://chainguard-studio-production.up.railway.app/paygate), unlimited members, automated kicks |
-| **Turnkey B2B VIP Gate Deployment (24h)** | **$199 USDT** (`$99` deposit) | Full branded Telegram + multi-chain USDT/USDC checkout configured, tested & handed over |
-| **Custom Crypto Bot + API / Exchange Automation** | **$499 USDT** (`$249` deposit) | Bespoke multi-chain checkout + webhooks + Discord/Telegram/SaaS/Exchange (`Binance/Bitget/BingX`) Python backend |
+| **30-Day Unlimited MCP & Pro API Pass** | **$9 USDC/USDT** | [⚡ Pay $9 Base USDC/USDT — Auto-Mints `cg_live_` Key](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=9&network=base&title=30-Day+Unlimited+MCP+%26+Pro+API+Pass&issue_pass=1) |
+| **Managed Cloud VIP Bot** | **$29 USDT/mo** (7-day free trial) | [Launch Bot Free in 60s](https://chainguard-studio-production.up.railway.app/paygate#setup) |
+| **Lifetime White-Label Bot License** | **$79 USDT** one-time | [⚡ Pay $79 Polygon USDT/USDC](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=79&network=polygon&title=PayGate+Lifetime+White-Label+License) |
+| **Turnkey B2B VIP Gate Deployment (24h)** | **$199 USDT** (`$99` deposit) | [⚡ Pay $99 Kickoff Deposit (Polygon)](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=99&network=polygon&title=Turnkey+VIP+Gate+Deployment+50pct+Deposit) · [Book B2B Scope](https://chainguard-studio-production.up.railway.app/paygate#b2b) |
+| **Custom Crypto Bot + API / Exchange Automation** | **$499 USDT** (`$249` deposit) | [⚡ Pay $249 Kickoff Deposit (Polygon)](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=249&network=polygon&title=Custom+Bot+%2B+Exchange+API+50pct+Deposit) · [Submit GitHub Inquiry](https://github.com/EzeLich/paygate-usdt/issues/new?template=b2b_custom_deployment.yml) |
 
 - ⚡ **Book Directly with On-Chain Checkout:** [https://chainguard-studio-production.up.railway.app/paygate#b2b](https://chainguard-studio-production.up.railway.app/paygate#b2b)
 - 📝 **Submit a Custom Scope via GitHub Issues:** [Open a B2B Custom Integration Request](https://github.com/EzeLich/paygate-usdt/issues/new?template=b2b_custom_deployment.yml)
