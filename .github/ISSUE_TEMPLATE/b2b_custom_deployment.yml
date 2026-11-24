@@ -1,0 +1,51 @@
+name: "🏢 Request Turnkey Deployment or Custom Integration ($199–$499 USDT)"
+description: "Need a branded Telegram VIP USDT paywall, SaaS crypto checkout, or custom Python/exchange bot? Submit your brief here or book directly via PayGate B2B."
+title: "[B2B Inquiry] "
+labels: ["b2b-inquiry", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Prefer instant self-serve or immediate kickoff checkout? Book directly with on-chain USDT/USDC deposit at:
+        **https://chainguard-studio-production.up.railway.app/paygate#b2b**
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Preferred Engagement Package
+      options:
+        - "Turnkey VIP Gate Deployment ($199 USDT · 24h delivery)"
+        - "Custom Crypto Checkout + Bot / Exchange Automation ($499 USDT · 3-5 days)"
+        - "Hosted Pro Cloud ($29/mo USDT) / Custom Retainer"
+    validations:
+      required: true
+
+  - type: input
+    id: contact
+    attributes:
+      label: Telegram @handle or Email
+      placeholder: "@yourhandle or founder@company.com"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: chains
+    attributes:
+      label: Preferred Settlement Chains
+      multiple: true
+      options:
+        - Polygon (USDT / USDC)
+        - BNB Smart Chain BEP20 (USDT / USDC)
+        - Base (USDC / USDT)
+        - Arbitrum One (USDT / USDC)
+        - Solana (USDC / USDT)
+        - Ethereum Mainnet (USDC / USDT)
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: What do you need automated?
+      description: Describe your Telegram community, SaaS checkout, webhook flow, or exchange automation goals.
+      placeholder: "e.g. Replace manual TRC20 DM approvals for our 500-member channel + auto-kick expired users + Notion/CRM webhook."
+    validations:
+      required: true
