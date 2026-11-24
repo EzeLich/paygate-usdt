@@ -547,21 +547,91 @@ def verify_and_settle_invoice(
         payer=res.sender,
     )
     if updated:
+        meta = dict(updated.get("metadata") or {})
+        is_studio_merchant = (
+            updated["merchant_wallet"].strip().lower() == StudioConfig.PHANTOM_EVM_ADDRESS.strip().lower()
+            or updated["merchant_wallet"].strip() == StudioConfig.PHANTOM_SOL_ADDRESS.strip()
+        )
+        if is_studio_merchant and float(updated["paid_amount_usd"]) >= 5.0 and bool(meta.get("issue_pass")):
+            pass_obj = ledger.issue_api_pass(
+                plan_id="paygate_instant_pass",
+                tx_hash=tx,
+                calls=1000 if float(updated["paid_amount_usd"]) < 29.0 else 5000,
+                days=30,
+                owner_wallet=res.sender,
+            )
+            meta["api_pass"] = pass_obj
+            updated = ledger.update_paygate_invoice_metadata(updated["invoice_id"], meta) or updated
         dispatch_invoice_webhook(updated)
     ledger.record_event(
         "PayGateInvoice",
         "invoice_paid",
         f"{inv['invoice_id']} ${res.amount_usd:.2f} {res.token} on {res.network}",
     )
-    return {"ok": True, "invoice": updated or inv}
+    final_inv = updated or inv
+    return {"ok": True, "invoice": final_inv, "receipt": build_invoice_receipt(final_inv)}
+
+
+_EXPLORER_TX_URLS: dict[str, str] = {
+    "polygon": "https://polygonscan.com/tx/",
+    "bsc": "https://bscscan.com/tx/",
+    "base": "https://basescan.org/tx/",
+    "arbitrum": "https://arbiscan.io/tx/",
+    "ethereum": "https://etherscan.io/tx/",
+    "solana": "https://solscan.io/tx/",
+}
+
+
+def build_invoice_receipt(invoice: dict[str, Any]) -> dict[str, Any]:
+    net = str(invoice.get("network") or "").lower()
+    tx = str(invoice.get("tx_hash") or "")
+    canonical = {
+        "invoice_id": invoice["invoice_id"],
+        "status": invoice.get("status", ""),
+        "title": invoice.get("title", ""),
+        "amount_usd": float(invoice.get("amount_usd") or 0.0),
+        "paid_amount_usd": float(invoice.get("paid_amount_usd") or 0.0),
+        "token": invoice.get("token", ""),
+        "network": net,
+        "merchant_wallet": invoice.get("merchant_wallet", ""),
+        "payer": invoice.get("payer", ""),
+        "tx_hash": tx,
+        "paid_at": invoice.get("paid_at", ""),
+    }
+    digest = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    meta = invoice.get("metadata") or {}
+    return {
+        **canonical,
+        "receipt_sha256": digest,
+        "explorer_url": (_EXPLORER_TX_URLS[net] + tx) if (tx and net in _EXPLORER_TX_URLS) else "",
+        "api_pass": meta.get("api_pass"),
+    }
+
+
+def _wallet_payment_uri(invoice: dict[str, Any]) -> str:
+    net = str(invoice.get("network") or "polygon").lower()
+    wal = str(invoice.get("merchant_wallet") or "").strip()
+    amt = float(invoice.get("amount_usd") or 0.0)
+    if net == "solana":
+        usdc_mint = StudioConfig.SOLANA_STABLECOINS["USDC"][0]
+        return f"solana:{wal}?amount={amt:.2f}&spl-token={usdc_mint}"
+    chain_id = StudioConfig.EVM_CHAIN_IDS.get(net, 137)
+    tok_map = StudioConfig.EVM_STABLECOINS.get(net, {})
+    tok_addr, dec = tok_map.get("USDT") or tok_map.get("USDC") or ("", 6)
+    if not tok_addr:
+        return wal
+    units = int(round(amt * 100)) * (10 ** max(0, dec - 2))
+    return f"ethereum:{tok_addr}@{chain_id}/transfer?address={wal}&uint256={units}"
 
 
 def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     inv_id = html.escape(invoice["invoice_id"])
     title = html.escape(invoice["title"])
-    net = html.escape(invoice["network"].upper())
+    net_raw = str(invoice["network"]).lower()
+    net = html.escape(net_raw.upper())
     wallet = html.escape(invoice["merchant_wallet"])
-    amt = f"{float(invoice['amount_usd']):.2f}"
+    amt_f = float(invoice["amount_usd"])
+    amt = f"{amt_f:.2f}"
     is_paid = invoice.get("status") == "paid"
     badge_bg = "rgba(16,185,129,.16)" if is_paid else "rgba(245,158,11,.15)"
     badge_fg = "#6ee7b7" if is_paid else "#fcd34d"
@@ -569,20 +639,55 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     status_txt = "PAID · CONFIRMED ON-CHAIN" if is_paid else "PENDING ON-CHAIN TRANSFER"
     tx_esc = html.escape(invoice.get("tx_hash") or "")
     redir = html.escape(invoice.get("redirect_url") or "")
+    api_pass = (invoice.get("metadata") or {}).get("api_pass") or {}
+    api_key_esc = html.escape(str(api_pass.get("api_key") or ""))
+    receipt_url = f"{base}/paygate/receipt/{inv_id}"
+    pay_uri = html.escape(_wallet_payment_uri(invoice))
+
+    evm_tokens = StudioConfig.EVM_STABLECOINS.get(net_raw, {})
+    evm_chain_id = StudioConfig.EVM_CHAIN_IDS.get(net_raw, 137)
+    usdt_addr, usdt_dec = evm_tokens.get("USDT") or ("", 6)
+    usdc_addr, usdc_dec = evm_tokens.get("USDC") or ("", 6)
+    one_click_btns = ""
+    if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
+        btns = []
+        if usdt_addr:
+            btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">⚡ 1-Click Pay ${amt} USDT (MetaMask / Rabby / Phantom)</button>""")
+        if usdc_addr:
+            btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">⚡ 1-Click Pay ${amt} USDC</button>""")
+        if btns:
+            one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
+
+    paid_key_html = (
+        f"""<div style="margin-top:10px;background:#020617;border:1px solid #38bdf8;border-radius:10px;padding:12px;">
+          <div style="font-size:.84rem;color:#7dd3fc;font-weight:800;">🔑 Your Unlimited MCP &amp; Pro API Key Is Ready:</div>
+          <code style="display:block;margin-top:6px;">{api_key_esc}</code>
+          <div style="font-size:.78rem;color:#94a3b8;margin-top:6px;">Pass in header <code>X-API-Key: {api_key_esc}</code> to unlock {api_pass.get('calls_remaining', 1000)} calls + unlimited <code>/mcp</code>.</div>
+        </div>"""
+        if api_key_esc
+        else ""
+    )
+
     paid_block = (
         f"""<div class="card" style="background:#052e16;border-color:#10b981;margin-top:16px;">
           <div style="font-weight:800;color:#6ee7b7;">✅ Payment Confirmed On-Chain</div>
           <div style="font-size:.88rem;margin-top:6px;">TX: <code>{tx_esc}</code></div>
-          {f'<div style="margin-top:10px;"><a class="btn" href="{redir}">Continue to Merchant →</a></div>' if redir else ''}
+          {paid_key_html}
+          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a class="btn2" href="{receipt_url}">🧾 View Verifiable SHA-256 Receipt</a>
+            {f'<a class="btn" href="{redir}">Continue to Merchant →</a>' if redir else ''}
+          </div>
         </div>"""
         if is_paid
         else f"""<div class="card" style="margin-top:16px;">
-          <label>1. Send exact amount (USDT or USDC on <strong>{net}</strong>) directly to merchant wallet:</label>
+          {one_click_btns}
+          <label>1. Or send exact amount (USDT or USDC on <strong>{net}</strong>) directly to merchant wallet:</label>
           <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
             <code id="mWal" style="flex:1;padding:10px;display:block;">{wallet}</code>
             <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
           </div>
-          <label style="margin-top:14px;">2. Paste transaction hash after sending:</label>
+          <div style="margin-top:8px;font-size:.78rem;color:#94a3b8;">Mobile / Wallet URI: <code>{pay_uri}</code></div>
+          <label style="margin-top:14px;">2. Transaction hash (auto-filled on 1-click wallet pay, or paste manually):</label>
           <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
             <input id="invTx" style="flex:1;min-width:220px;" placeholder="0x... or Solana signature"/>
             <button class="btn" onclick="verifyInv()">Verify On-Chain Payment</button>
@@ -590,19 +695,20 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
           <div id="invMsg" style="margin-top:10px;font-size:.9rem;"></div>
         </div>"""
     )
+    cents_int = int(round(amt_f * 100))
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Pay ${amt} USDT — {title} | PayGate USDT</title>
 <style>
   *{{box-sizing:border-box}} body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,sans-serif;line-height:1.55}}
-  .wrap{{max-width:660px;margin:0 auto;padding:32px 16px 64px}}
+  .wrap{{max-width:680px;margin:0 auto;padding:32px 16px 64px}}
   .card{{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px}}
   .badge{{display:inline-block;padding:4px 11px;border-radius:999px;background:{badge_bg};border:1px solid {badge_bd};color:{badge_fg};font-size:.76rem;font-weight:800}}
   .btn{{display:inline-block;background:#10b981;color:#02160f;font-weight:800;padding:10px 18px;border-radius:10px;border:none;cursor:pointer;text-decoration:none}}
   .btn2{{display:inline-block;background:#1e293b;color:#f8fafc;font-weight:700;padding:10px 14px;border-radius:10px;border:1px solid #334155;cursor:pointer;text-decoration:none}}
   input{{padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#070b14;color:#f8fafc;font-size:.92rem}}
   label{{display:block;font-size:.84rem;color:#cbd5e1;font-weight:700}}
-  code{{background:#020617;padding:4px 8px;border-radius:6px;color:#6ee7b7;font-size:.84rem;word-break:break-all}}
+  code{{background:#020617;padding:4px 8px;border-radius:6px;color:#6ee7b7;font-size:.82rem;word-break:break-all}}
 </style></head><body><div class="wrap">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
     <span class="badge">{status_txt}</span>
@@ -619,19 +725,128 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
   </div>
 </div>
 <script>
-async function verifyInv() {{
+const TARGET_CHAIN_HEX = '0x' + ({evm_chain_id}).toString(16);
+const MERCHANT_WALLET = '{wallet}';
+const CENTS_INT = {cents_int};
+
+async function payWithWallet(tokenContract, decimals, sym) {{
   const m = document.getElementById('invMsg');
-  m.style.color = '#94a3b8';
-  m.textContent = 'Checking RPC finality...';
+  if (!window.ethereum) {{
+    m.style.color = '#fca5a5';
+    m.textContent = 'No browser wallet detected (MetaMask/Rabby/Phantom). Transfer manually above and paste TX hash.';
+    return;
+  }}
+  try {{
+    m.style.color = '#38bdf8';
+    m.textContent = 'Connecting wallet & switching to {net}...';
+    const accs = await window.ethereum.request({{ method: 'eth_requestAccounts' }});
+    const from = accs[0];
+    try {{
+      await window.ethereum.request({{ method: 'wallet_switchEthereumChain', params: [{{ chainId: TARGET_CHAIN_HEX }}] }});
+    }} catch (swErr) {{}}
+    const amountRaw = BigInt(CENTS_INT) * (10n ** BigInt(Math.max(0, decimals - 2)));
+    const recPad = MERCHANT_WALLET.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+    const amtPad = amountRaw.toString(16).padStart(64, '0');
+    const calldata = '0xa9059cbb' + recPad + amtPad;
+    m.textContent = 'Confirm ' + sym + ' transfer in your wallet...';
+    const txHash = await window.ethereum.request({{
+      method: 'eth_sendTransaction',
+      params: [{{ from: from, to: tokenContract, data: calldata, value: '0x0' }}]
+    }});
+    document.getElementById('invTx').value = txHash;
+    m.style.color = '#34d399';
+    m.textContent = 'TX broadcast (' + txHash.slice(0, 14) + '...). Waiting for RPC finality...';
+    pollVerify();
+  }} catch (err) {{
+    m.style.color = '#fca5a5';
+    m.textContent = (err && err.message) ? err.message : 'Wallet payment cancelled.';
+  }}
+}}
+
+let _pollCount = 0;
+async function pollVerify() {{
+  _pollCount += 1;
+  const ok = await verifyInv(true);
+  if (!ok && _pollCount < 12) {{
+    setTimeout(pollVerify, 3000);
+  }}
+}}
+
+async function verifyInv(silent) {{
+  const m = document.getElementById('invMsg');
+  const tx = document.getElementById('invTx').value.trim();
+  if (!tx) {{ m.style.color = '#fca5a5'; m.textContent = 'Paste a valid transaction hash.'; return false; }}
+  if (!silent) {{ m.style.color = '#94a3b8'; m.textContent = 'Checking RPC finality...'; }}
   const r = await fetch('/api/v1/paygate/invoices/{inv_id}/verify', {{
     method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{ tx_hash: document.getElementById('invTx').value.trim() }})
+    body: JSON.stringify({{ tx_hash: tx }})
   }});
   const d = await r.json();
-  if (!r.ok) {{ m.style.color = '#fca5a5'; m.textContent = d.detail || 'Not verified yet.'; return; }}
+  if (!r.ok) {{
+    m.style.color = silent ? '#fcd34d' : '#fca5a5';
+    m.textContent = (d.detail || 'Awaiting confirmation...') + (silent ? ' (retrying in 3s...)' : '');
+    return false;
+  }}
   location.reload();
+  return true;
 }}
 </script></body></html>"""
+
+
+def render_paygate_receipt_html(base: str, invoice: dict[str, Any]) -> str:
+    rec = build_invoice_receipt(invoice)
+    inv_id = html.escape(rec["invoice_id"])
+    title = html.escape(rec["title"])
+    tx_esc = html.escape(rec["tx_hash"] or "Pending")
+    exp_url = html.escape(rec["explorer_url"] or "")
+    sha_esc = html.escape(rec["receipt_sha256"])
+    api_pass = rec.get("api_pass") or {}
+    key_esc = html.escape(str(api_pass.get("api_key") or ""))
+    return f"""<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Receipt {inv_id} · PayGate USDT</title>
+<style>
+  *{{box-sizing:border-box}} body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,sans-serif;line-height:1.6}}
+  .wrap{{max-width:680px;margin:0 auto;padding:32px 16px}}
+  .card{{background:#0f172a;border:1px solid #10b981;border-radius:14px;padding:22px}}
+  code{{background:#020617;padding:3px 7px;border-radius:6px;color:#6ee7b7;font-size:.82rem;word-break:break-all}}
+  .row{{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #1e293b;padding:8px 0;font-size:.9rem}}
+</style></head><body><div class="wrap"><div class="card">
+  <div style="color:#10b981;font-weight:900;font-size:.82rem;">⚡ VERIFIED ON-CHAIN RECEIPT</div>
+  <h1 style="margin:6px 0 14px;font-size:1.5rem;">{title}</h1>
+  <div class="row"><span>Invoice ID</span><code>{inv_id}</code></div>
+  <div class="row"><span>Status</span><strong>{html.escape(str(rec['status']).upper())}</strong></div>
+  <div class="row"><span>Amount Settled</span><strong>${float(rec['paid_amount_usd'] or rec['amount_usd']):.2f} {html.escape(str(rec['token'] or 'USDT'))}</strong></div>
+  <div class="row"><span>Network</span><strong>{html.escape(str(rec['network']).upper())}</strong></div>
+  <div class="row"><span>Merchant Wallet</span><code>{html.escape(str(rec['merchant_wallet']))}</code></div>
+  <div class="row"><span>Transaction Hash</span><code>{tx_esc}</code></div>
+  <div class="row"><span>Canonical SHA-256</span><code>{sha_esc}</code></div>
+  {f'<div class="row"><span>Issued API Pass</span><code>{key_esc}</code></div>' if key_esc else ''}
+  <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;">
+    {f'<a href="{exp_url}" target="_blank" style="color:#38bdf8;font-weight:700;">View on Block Explorer →</a>' if exp_url else ''}
+    <a href="{base}/api/v1/paygate/invoices/{inv_id}/receipt" style="color:#94a3b8;">Raw JSON Receipt</a>
+    <a href="{base}/paygate" style="color:#94a3b8;">PayGate USDT</a>
+  </div>
+</div></div></body></html>"""
+
+
+def render_paygate_widget_js(base: str) -> str:
+    safe_base = base.rstrip("/")
+    return f"""(function(){{
+  var nodes=document.querySelectorAll('[data-paygate-merchant]');
+  nodes.forEach(function(el){{
+    var m=el.getAttribute('data-paygate-merchant')||'';
+    var a=el.getAttribute('data-paygate-amount')||'29';
+    var n=el.getAttribute('data-paygate-network')||'polygon';
+    var t=el.getAttribute('data-paygate-title')||'Instant Payment';
+    var p=el.getAttribute('data-paygate-pass')||'0';
+    var href='{safe_base}/paygate/pay?merchant='+encodeURIComponent(m)+'&amount='+encodeURIComponent(a)+'&network='+encodeURIComponent(n)+'&title='+encodeURIComponent(t)+'&issue_pass='+encodeURIComponent(p);
+    if(el.tagName==='A'){{el.href=href;el.target='_blank';}}
+    else{{el.style.cursor='pointer';el.addEventListener('click',function(){{window.open(href,'_blank');}});}}
+    if(!el.textContent.trim()){{el.textContent='Pay $'+a+' USDT ('+n.toUpperCase()+')';}}
+  }});
+}})();
+"""
 
 
 def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "en") -> str:
