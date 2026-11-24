@@ -223,3 +223,64 @@ def test_paygate_client_create_invoice_mock(monkeypatch):
     assert res["invoice"]["invoice_id"] == "inv_demo"
     ch = build_x402_challenge(resource_url="https://api.example.com/v1/pro", description="Pro", price_usd=1.0)
     assert ch["x402Version"] == 2
+
+
+def test_stdio_mcp_jsonrpc_and_cli(monkeypatch, capsys):
+    from paygate_sdk import handle_mcp_jsonrpc
+    from paygate_sdk.cli import main as cli_main
+
+    init = handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+    assert init["result"]["serverInfo"]["name"] == "paygate-usdt"
+    assert handle_mcp_jsonrpc({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+
+    tl = handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+    tool_names = [t["name"] for t in tl["result"]["tools"]]
+    assert "create_usdt_invoice" in tool_names
+    assert "verify_onchain_tx" in tool_names
+
+    monkeypatch.setattr(
+        PayGateClient,
+        "create_invoice",
+        lambda self, **kw: {
+            "ok": True,
+            "checkout_url": "https://example.com/paygate/checkout/inv_cli1",
+            "invoice": {"invoice_id": "inv_cli1", "title": kw["title"]},
+        },
+    )
+    tc = handle_mcp_jsonrpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_usdt_invoice",
+                "arguments": {
+                    "title": "MCP Tool Invoice",
+                    "amount_usd": 12.0,
+                    "network": "polygon",
+                    "merchant_wallet": "0x3333333333333333333333333333333333333333",
+                },
+            },
+        }
+    )
+    payload = json.loads(tc["result"]["content"][0]["text"])
+    assert payload["ok"] is True
+    assert payload["invoice"]["invoice_id"] == "inv_cli1"
+
+    rc = cli_main(
+        [
+            "invoice",
+            "--title",
+            "CLI Test Invoice",
+            "--amount",
+            "15",
+            "--network",
+            "base",
+            "--wallet",
+            "0x3333333333333333333333333333333333333333",
+        ]
+    )
+    assert rc == 0
+    out_json = json.loads(capsys.readouterr().out)
+    assert out_json["checkout_url"].endswith("/inv_cli1")
+
