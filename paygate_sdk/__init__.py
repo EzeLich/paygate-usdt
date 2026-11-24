@@ -238,9 +238,12 @@ class PayGateClient:
         )
 
 
+from .cli import handle_mcp_jsonrpc
+
 __all__ = [
     "PayGateClient",
     "build_x402_challenge",
+    "handle_mcp_jsonrpc",
     "require_usdt_payment",
     "verify_webhook_signature",
 ]
