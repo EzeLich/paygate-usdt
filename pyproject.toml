@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paygate-usdt"
+version = "2.0.0"
+description = "Self-hosted & cloud non-custodial USDT/USDC payment gateway with hosted invoices, HMAC-SHA256 webhooks, HTTP 402 (x402 v2) FastAPI paywall, Telegram VIP bot automation, and MCP Server."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Ezequiel Lech", email = "ezequiellich44@gmail.com"}
+]
+keywords = [
+  "usdt",
+  "usdc",
+  "stablecoin-payments",
+  "crypto-payment-gateway",
+  "x402",
+  "mcp",
+  "fastapi",
+  "telegram-bot",
+  "non-custodial",
+  "web3"
+]
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "pydantic>=2.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "httpx>=0.27.0"
+]
+
+[project.urls]
+Homepage = "https://chainguard-studio-production.up.railway.app/paygate"
+Repository = "https://github.com/EzeLich/paygate-usdt"
+Issues = "https://github.com/EzeLich/paygate-usdt/issues"
+
+[tool.setuptools.packages.find]
+include = ["paygate_sdk*", "app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
