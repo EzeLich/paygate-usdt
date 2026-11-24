@@ -29,8 +29,25 @@ def _mcp_tools_schema() -> list[dict[str, Any]]:
                     "merchant_wallet": {"type": "string"},
                     "webhook_url": {"type": "string", "default": ""},
                     "ttl_minutes": {"type": "integer", "default": 60},
+                    "customer_ref": {"type": "string", "default": ""},
+                    "billing_days": {"type": "integer", "default": 0},
                 },
                 "required": ["title", "amount_usd", "network", "merchant_wallet"],
+            },
+        },
+        {
+            "name": "check_usdt_subscription",
+            "description": "Check non-custodial recurring subscription status and renewal URL for a customer_ref.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "merchant_wallet": {"type": "string"},
+                    "customer_ref": {"type": "string"},
+                    "amount_usd": {"type": "number", "default": 9.0},
+                    "network": {"type": "string", "default": "polygon"},
+                    "billing_days": {"type": "integer", "default": 30},
+                },
+                "required": ["merchant_wallet", "customer_ref"],
             },
         },
         {
@@ -74,18 +91,91 @@ def handle_mcp_jsonrpc(msg: dict[str, Any], base_url: str = DEFAULT_BASE_URL) ->
     rpc_id = msg.get("id")
     params = msg.get("params") or {}
 
-    if method == "notifications/initialized":
+    if method.startswith("notifications/"):
         return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": rpc_id, "result": {}}
     if method == "initialize":
+        req_proto = str(params.get("protocolVersion") or "2025-03-26")
+        supported = {"2025-06-18", "2025-03-26", "2024-11-05"}
         return {
             "jsonrpc": "2.0",
             "id": rpc_id,
             "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "paygate-usdt", "version": "2.1.0"},
+                "protocolVersion": req_proto if req_proto in supported else "2025-03-26",
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "resources": {"subscribe": False, "listChanged": False},
+                    "prompts": {"listChanged": False},
+                },
+                "serverInfo": {"name": "paygate-usdt", "version": "2.3.0"},
             },
         }
+    if method == "resources/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": rpc_id,
+            "result": {
+                "resources": [
+                    {
+                        "uri": "paygate://quickstart",
+                        "name": "PayGate USDT v2.3 Quickstart",
+                        "description": "Non-custodial USDT/USDC invoicing, x402 paywalls, and recurring subscriptions.",
+                        "mimeType": "text/markdown",
+                    }
+                ]
+            },
+        }
+    if method == "resources/read":
+        uri = str(params.get("uri") or "")
+        if uri == "paygate://quickstart":
+            return {
+                "jsonrpc": "2.0",
+                "id": rpc_id,
+                "result": {
+                    "contents": [
+                        {
+                            "uri": uri,
+                            "mimeType": "text/markdown",
+                            "text": f"# PayGate USDT v2.3\n\n- Checkout UI: {base_url}/paygate\n- Docs: https://github.com/EzeLich/paygate-usdt\n",
+                        }
+                    ]
+                },
+            }
+        return {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32602, "message": f"Unknown URI: {uri}"}}
+    if method == "prompts/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": rpc_id,
+            "result": {
+                "prompts": [
+                    {
+                        "name": "create_recurring_usdt_plan",
+                        "description": "Create a non-custodial 30-day recurring USDT/USDC subscription invoice.",
+                    }
+                ]
+            },
+        }
+    if method == "prompts/get":
+        p_name = str(params.get("name") or "")
+        if p_name == "create_recurring_usdt_plan":
+            return {
+                "jsonrpc": "2.0",
+                "id": rpc_id,
+                "result": {
+                    "description": "Generate a 30-day recurring USDT/USDC checkout link via PayGate.",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": {
+                                "type": "text",
+                                "text": "Call create_usdt_invoice with billing_days=30 and customer_ref set to the user ID.",
+                            },
+                        }
+                    ],
+                },
+            }
+        return {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32602, "message": f"Unknown prompt: {p_name}"}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": rpc_id, "result": {"tools": _mcp_tools_schema()}}
     if method == "tools/call":
@@ -100,6 +190,16 @@ def handle_mcp_jsonrpc(msg: dict[str, Any], base_url: str = DEFAULT_BASE_URL) ->
                 merchant_wallet=str(args.get("merchant_wallet") or ""),
                 webhook_url=str(args.get("webhook_url") or ""),
                 ttl_minutes=int(args.get("ttl_minutes") or 60),
+                customer_ref=str(args.get("customer_ref") or ""),
+                billing_days=int(args.get("billing_days") or 0),
+            )
+        elif name == "check_usdt_subscription":
+            out = client.check_subscription(
+                merchant_wallet=str(args.get("merchant_wallet") or ""),
+                customer_ref=str(args.get("customer_ref") or ""),
+                amount_usd=float(args.get("amount_usd") or 9.0),
+                network=str(args.get("network") or "polygon"),
+                billing_days=int(args.get("billing_days") or 30),
             )
         elif name == "get_usdt_invoice":
             out = client.get_invoice(str(args.get("invoice_id") or ""))

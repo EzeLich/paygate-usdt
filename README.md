@@ -1,4 +1,4 @@
-# PayGate USDT v2.0 — Non-Custodial Stablecoin Payment Gateway, x402 Paywall, Telegram VIP Bot & MCP Server
+# PayGate USDT v2.3 — Non-Custodial Stablecoin Payment Gateway, Subscriptions & MCP Server
 
 [![CI](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -19,15 +19,16 @@ No custodial processor holds your funds. No Stripe / Whop / bank account require
 
 ## Why Builders Choose PayGate USDT Over Custodial Processors
 
-| Feature | PayGate USDT v2.0 | Custodial Gateways / Whop / InviteMember |
+| Feature | PayGate USDT v2.3 | Custodial Gateways / Whop / InviteMember |
 |---|---|---|
 | **Settlement Destination** | **100% direct buyer -> your wallet** (Phantom, MetaMask, Ledger, Safe, Exchange) | Held by intermediary; payout delays / freezes |
 | **Transaction Fees** | **$0% cut** on settlements (self-hosted MIT) | 1%–10% + withdrawal minimums |
 | **Networks Supported** | **Polygon, BSC (BEP-20), Base, Arbitrum, Ethereum, Solana SPL** | Limited or custodian-locked |
 | **Hosted Invoice Pages + Webhooks** | ✅ `/paygate/checkout/{id}` + `X-PayGate-Signature` (`HMAC-SHA256`) | Often requires merchant KYB/KYC |
+| **Non-Custodial SaaS Subscriptions** | ✅ `customer_ref` + `billing_days` + `/api/v1/paygate/subscriptions/check` (renewal stacking, 0 `MAX_UINT256` approvals) | Requires cards or infinite token approvals |
 | **FastAPI HTTP 402 (`x402 v2`) Decorator** | ✅ `@require_usdt_payment(...)` with `PAYMENT-REQUIRED` header + anti-replay | Rare / separate SDK |
 | **Telegram Paid VIP Automation** | ✅ 60-second bot onboarding, 1-time invite links, auto-kick on expiry | High % revenue share |
-| **MCP Server for AI Agents** | ✅ `create_usdt_invoice` & `verify_usdt_invoice` native tools | Not supported |
+| **MCP Server for AI Agents** | ✅ Streamable HTTP (`2025-03-26`, `ping`, `resources`, `prompts`) + Stdio MCP | Not supported |
 | **Security & Reproducibility** | **100% pure auditable Python**, full `pytest` + GitHub Actions CI | Black-box binaries / closed SaaS |
 
 ---
@@ -161,6 +162,27 @@ url = PayGateClient().build_payment_url(
     network="polygon",
     title="Pro Plan (30d)",
 )
+```
+
+### 6. Non-Custodial Recurring SaaS Subscriptions (No Infinite Approvals)
+
+Accept recurring 30-day SaaS/API memberships directly in USDT/USDC without requesting `MAX_UINT256` token allowances. Renewals paid early automatically stack remaining days:
+
+```python
+from paygate_sdk import PayGateClient
+
+client = PayGateClient("https://chainguard-studio-production.up.railway.app")
+
+# 1. Check active entitlement & get a 1-Click pre-filled renewal link
+sub = client.check_subscription(
+    merchant_wallet="0xYourEvmWalletAddress",
+    customer_ref="user_42",
+    amount_usd=19.0,
+    network="base",
+    billing_days=30,
+)
+if not sub["active"]:
+    print("Renew here:", sub["renewal_url"])
 ```
 
 - [`examples/fastapi_x402_demo.py`](examples/fastapi_x402_demo.py) — FastAPI paywall route protected by `@require_usdt_payment`

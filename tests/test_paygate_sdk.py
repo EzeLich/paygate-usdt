@@ -320,3 +320,48 @@ def test_stateless_payment_url_receipt_and_widget():
     js = render_paygate_widget_js("https://chainguard-studio-production.up.railway.app")
     assert "data-paygate-merchant" in js
 
+
+def test_v23_recurring_subscriptions_and_mcp_handshake(tmp_path):
+    from paygate_sdk.cli import handle_mcp_jsonrpc
+
+    client = PayGateClient("https://chainguard-studio-production.up.railway.app")
+    sub_url = client.build_payment_url(
+        merchant_wallet="0x3333333333333333333333333333333333333333",
+        amount_usd=19.0,
+        network="base",
+        title="SaaS Pro",
+        customer_ref="cust_99",
+        billing_days=30,
+    )
+    assert "customer_ref=cust_99" in sub_url
+    assert "billing_days=30" in sub_url
+
+    ledger = StudioLedger(str(tmp_path / "subs_v23.db"))
+    wallet = "0x3333333333333333333333333333333333333333"
+    inv = ledger.find_or_create_paygate_invoice(
+        title="SaaS Pro",
+        amount_usd=19.0,
+        network="polygon",
+        merchant_wallet=wallet,
+        metadata={"customer_ref": "cust_99", "billing_days": 30},
+    )
+    ledger.mark_paygate_invoice_paid(
+        inv["invoice_id"],
+        tx_hash="0x" + "77" * 32,
+        paid_amount_usd=19.0,
+        token="USDC",
+        payer="0x1111111111111111111111111111111111111111",
+    )
+    status = ledger.get_paygate_subscription_status(merchant_wallet=wallet, customer_ref="cust_99")
+    assert status["active"] is True
+    assert status["days_remaining"] >= 29.0
+
+    # MCP 2025-03-26 handshake methods
+    init = handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26"}})
+    assert init["result"]["protocolVersion"] == "2025-03-26"
+    assert handle_mcp_jsonrpc({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+    assert handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 2, "method": "ping"}) == {"jsonrpc": "2.0", "id": 2, "result": {}}
+    assert len(handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 3, "method": "resources/list"})["result"]["resources"]) >= 1
+    assert len(handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 4, "method": "prompts/list"})["result"]["prompts"]) >= 1
+
+

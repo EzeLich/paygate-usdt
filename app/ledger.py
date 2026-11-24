@@ -1188,8 +1188,10 @@ class StudioLedger:
         clean_title = title.strip()[:140]
         clean_net = network.strip().lower()[:24]
         clean_wal = merchant_wallet.strip()[:120]
+        req_customer_ref = str((metadata or {}).get("customer_ref") or "").strip()
+        req_billing_days = int((metadata or {}).get("billing_days") or 0)
         with self._connect() as conn:
-            row = conn.execute(
+            rows = conn.execute(
                 """
                 SELECT * FROM paygate_invoices
                 WHERE status = 'pending'
@@ -1198,13 +1200,17 @@ class StudioLedger:
                   AND ABS(amount_usd - ?) < 0.001
                   AND title = ?
                   AND expires_at > ?
-                ORDER BY created_at DESC LIMIT 1
+                ORDER BY created_at DESC LIMIT 25
                 """,
                 (clean_net, clean_wal, float(amount_usd), clean_title, now_iso),
-            ).fetchone()
-        if row:
+            ).fetchall()
+        for row in rows:
             out = dict(row)
             cur_meta = json.loads(out.pop("metadata_json") or "{}")
+            cur_ref = str(cur_meta.get("customer_ref") or "").strip()
+            cur_days = int(cur_meta.get("billing_days") or 0)
+            if cur_ref != req_customer_ref or cur_days != req_billing_days:
+                continue
             if metadata:
                 merged = {**cur_meta, **metadata}
                 if merged != cur_meta:
@@ -1222,6 +1228,84 @@ class StudioLedger:
             redirect_url=redirect_url,
             metadata=metadata,
         )
+
+    def get_paygate_subscription_status(
+        self,
+        *,
+        merchant_wallet: str,
+        customer_ref: str,
+        exclude_invoice_id: str = "",
+    ) -> dict[str, Any]:
+        clean_wal = merchant_wallet.strip()[:120]
+        clean_ref = customer_ref.strip()[:120]
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM paygate_invoices
+                WHERE status = 'paid'
+                  AND lower(merchant_wallet) = lower(?)
+                ORDER BY COALESCE(paid_at, created_at) DESC, created_at DESC
+                LIMIT 200
+                """,
+                (clean_wal,),
+            ).fetchall()
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            if exclude_invoice_id and row["invoice_id"] == exclude_invoice_id:
+                continue
+            meta = json.loads(row["metadata_json"] or "{}")
+            if str(meta.get("customer_ref") or "").strip() != clean_ref:
+                continue
+            billing_days = int(meta.get("billing_days") or 0)
+            exp_raw = str(meta.get("subscription_expires_at") or "").strip()
+            exp_dt: datetime | None = None
+            if exp_raw:
+                try:
+                    exp_dt = datetime.fromisoformat(exp_raw.replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                except Exception:
+                    exp_dt = None
+            if exp_dt is None and billing_days > 0 and row["paid_at"]:
+                try:
+                    paid_dt = datetime.fromisoformat(str(row["paid_at"]).replace("Z", "+00:00"))
+                    if paid_dt.tzinfo is None:
+                        paid_dt = paid_dt.replace(tzinfo=timezone.utc)
+                    exp_dt = paid_dt + timedelta(days=billing_days)
+                except Exception:
+                    exp_dt = None
+            if exp_dt is None:
+                continue
+            seconds_left = max(0.0, (exp_dt - now).total_seconds())
+            active = exp_dt > now
+            return {
+                "active": active,
+                "customer_ref": clean_ref,
+                "merchant_wallet": row["merchant_wallet"],
+                "plan": row["title"],
+                "last_invoice_id": row["invoice_id"],
+                "tx_hash": row["tx_hash"],
+                "amount_usd": float(row["paid_amount_usd"] or row["amount_usd"]),
+                "network": row["network"],
+                "billing_days": billing_days,
+                "paid_at": row["paid_at"],
+                "expires_at": exp_dt.isoformat(),
+                "days_remaining": round(seconds_left / 86400.0, 2) if active else 0.0,
+            }
+        return {
+            "active": False,
+            "customer_ref": clean_ref,
+            "merchant_wallet": clean_wal,
+            "plan": None,
+            "last_invoice_id": None,
+            "tx_hash": None,
+            "amount_usd": 0.0,
+            "network": None,
+            "billing_days": 0,
+            "paid_at": None,
+            "expires_at": None,
+            "days_remaining": 0.0,
+        }
 
     def get_stats(self) -> dict[str, Any]:
         with self._connect() as conn:

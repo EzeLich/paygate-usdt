@@ -13,7 +13,7 @@ import os
 import re
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .config import StudioConfig
@@ -552,15 +552,49 @@ def verify_and_settle_invoice(
             updated["merchant_wallet"].strip().lower() == StudioConfig.PHANTOM_EVM_ADDRESS.strip().lower()
             or updated["merchant_wallet"].strip() == StudioConfig.PHANTOM_SOL_ADDRESS.strip()
         )
+        meta = dict(updated.get("metadata") or {})
+        billing_days = int(meta.get("billing_days") or 0)
+        customer_ref = str(meta.get("customer_ref") or "").strip()
+        meta_changed = False
+        if billing_days > 0:
+            try:
+                paid_dt = datetime.fromisoformat(str(updated.get("paid_at") or "").replace("Z", "+00:00"))
+                if paid_dt.tzinfo is None:
+                    paid_dt = paid_dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                paid_dt = datetime.now(timezone.utc)
+            anchor_dt = paid_dt
+            if customer_ref and hasattr(ledger, "get_paygate_subscription_status"):
+                prior = ledger.get_paygate_subscription_status(
+                    merchant_wallet=updated["merchant_wallet"],
+                    customer_ref=customer_ref,
+                    exclude_invoice_id=updated["invoice_id"],
+                )
+                if prior.get("active") and prior.get("expires_at"):
+                    try:
+                        prior_exp = datetime.fromisoformat(str(prior["expires_at"]).replace("Z", "+00:00"))
+                        if prior_exp.tzinfo is None:
+                            prior_exp = prior_exp.replace(tzinfo=timezone.utc)
+                        if prior_exp > anchor_dt:
+                            anchor_dt = prior_exp
+                    except Exception:
+                        pass
+            meta["billing_days"] = billing_days
+            meta["subscription_expires_at"] = (anchor_dt + timedelta(days=billing_days)).isoformat()
+            if customer_ref:
+                meta["customer_ref"] = customer_ref
+            meta_changed = True
         if is_studio_merchant and float(updated["paid_amount_usd"]) >= 5.0 and bool(meta.get("issue_pass")):
             pass_obj = ledger.issue_api_pass(
                 plan_id="paygate_instant_pass",
                 tx_hash=tx,
                 calls=1000 if float(updated["paid_amount_usd"]) < 29.0 else 5000,
-                days=30,
+                days=billing_days if billing_days > 0 else 30,
                 owner_wallet=res.sender,
             )
             meta["api_pass"] = pass_obj
+            meta_changed = True
+        if meta_changed:
             updated = ledger.update_paygate_invoice_metadata(updated["invoice_id"], meta) or updated
         dispatch_invoice_webhook(updated)
     ledger.record_event(
@@ -605,6 +639,9 @@ def build_invoice_receipt(invoice: dict[str, Any]) -> dict[str, Any]:
         "receipt_sha256": digest,
         "explorer_url": (_EXPLORER_TX_URLS[net] + tx) if (tx and net in _EXPLORER_TX_URLS) else "",
         "api_pass": meta.get("api_pass"),
+        "customer_ref": str(meta.get("customer_ref") or ""),
+        "billing_days": int(meta.get("billing_days") or 0),
+        "subscription_expires_at": meta.get("subscription_expires_at"),
     }
 
 

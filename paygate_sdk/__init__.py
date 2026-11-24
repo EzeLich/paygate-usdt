@@ -209,23 +209,26 @@ class PayGateClient:
         webhook_secret: str = "",
         redirect_url: str = "",
         ttl_minutes: int = 60,
+        customer_ref: str = "",
+        billing_days: int = 0,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self._request(
-            "/api/v1/paygate/invoices",
-            method="POST",
-            payload={
-                "title": title,
-                "amount_usd": float(amount_usd),
-                "network": network,
-                "merchant_wallet": merchant_wallet,
-                "webhook_url": webhook_url,
-                "webhook_secret": webhook_secret,
-                "redirect_url": redirect_url,
-                "ttl_minutes": int(ttl_minutes),
-                "metadata": metadata or {},
-            },
-        )
+        payload: dict[str, Any] = {
+            "title": title,
+            "amount_usd": float(amount_usd),
+            "network": network,
+            "merchant_wallet": merchant_wallet,
+            "webhook_url": webhook_url,
+            "webhook_secret": webhook_secret,
+            "redirect_url": redirect_url,
+            "ttl_minutes": int(ttl_minutes),
+            "metadata": metadata or {},
+        }
+        if customer_ref.strip():
+            payload["customer_ref"] = customer_ref.strip()
+        if int(billing_days) > 0:
+            payload["billing_days"] = int(billing_days)
+        return self._request("/api/v1/paygate/invoices", method="POST", payload=payload)
 
     def get_invoice(self, invoice_id: str) -> dict[str, Any]:
         return self._request(f"/api/v1/paygate/invoices/{invoice_id}", method="GET")
@@ -240,6 +243,30 @@ class PayGateClient:
     def get_receipt(self, invoice_id: str) -> dict[str, Any]:
         return self._request(f"/api/v1/paygate/invoices/{invoice_id}/receipt", method="GET")
 
+    def check_subscription(
+        self,
+        *,
+        merchant_wallet: str,
+        customer_ref: str,
+        amount_usd: float = 9.0,
+        network: str = "polygon",
+        title: str = "Monthly Subscription",
+        billing_days: int = 30,
+    ) -> dict[str, Any]:
+        import urllib.parse
+
+        qs = urllib.parse.urlencode(
+            {
+                "merchant": merchant_wallet.strip(),
+                "customer_ref": customer_ref.strip(),
+                "amount": round(float(amount_usd), 2),
+                "network": network.strip().lower(),
+                "title": title.strip(),
+                "billing_days": int(billing_days),
+            }
+        )
+        return self._request(f"/api/v1/paygate/subscriptions/check?{qs}", method="GET")
+
     def build_payment_url(
         self,
         *,
@@ -249,20 +276,26 @@ class PayGateClient:
         title: str = "Instant Checkout",
         redirect_url: str = "",
         issue_pass: bool = False,
+        customer_ref: str = "",
+        billing_days: int = 0,
     ) -> str:
         import urllib.parse
 
-        qs = urllib.parse.urlencode(
-            {
-                "merchant": merchant_wallet.strip(),
-                "amount": round(float(amount_usd), 2),
-                "network": network.strip().lower(),
-                "title": title.strip(),
-                **({"redirect_url": redirect_url.strip()} if redirect_url.strip() else {}),
-                **({"issue_pass": 1} if issue_pass else {}),
-            }
-        )
-        return f"{self.base_url}/paygate/pay?{qs}"
+        params: dict[str, Any] = {
+            "merchant": merchant_wallet.strip(),
+            "amount": round(float(amount_usd), 2),
+            "network": network.strip().lower(),
+            "title": title.strip(),
+        }
+        if redirect_url.strip():
+            params["redirect_url"] = redirect_url.strip()
+        if issue_pass:
+            params["issue_pass"] = 1
+        if customer_ref.strip():
+            params["customer_ref"] = customer_ref.strip()
+        if int(billing_days) > 0:
+            params["billing_days"] = int(billing_days)
+        return f"{self.base_url}/paygate/pay?{urllib.parse.urlencode(params)}"
 
 
 from .cli import handle_mcp_jsonrpc
