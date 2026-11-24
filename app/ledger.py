@@ -1071,6 +1071,69 @@ class StudioLedger:
         out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
         return out
 
+    def update_paygate_invoice_metadata(self, invoice_id: str, metadata: dict[str, Any]) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE paygate_invoices SET metadata_json = ? WHERE invoice_id = ?",
+                (json.dumps(metadata), invoice_id.strip()),
+            )
+            row = conn.execute("SELECT * FROM paygate_invoices WHERE invoice_id = ?", (invoice_id.strip(),)).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
+        return out
+
+    def find_or_create_paygate_invoice(
+        self,
+        *,
+        title: str,
+        amount_usd: float,
+        network: str,
+        merchant_wallet: str,
+        ttl_minutes: int = 60,
+        redirect_url: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        clean_title = title.strip()[:140]
+        clean_net = network.strip().lower()[:24]
+        clean_wal = merchant_wallet.strip()[:120]
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM paygate_invoices
+                WHERE status = 'pending'
+                  AND network = ?
+                  AND lower(merchant_wallet) = lower(?)
+                  AND ABS(amount_usd - ?) < 0.001
+                  AND title = ?
+                  AND expires_at > ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (clean_net, clean_wal, float(amount_usd), clean_title, now_iso),
+            ).fetchone()
+        if row:
+            out = dict(row)
+            cur_meta = json.loads(out.pop("metadata_json") or "{}")
+            if metadata:
+                merged = {**cur_meta, **metadata}
+                if merged != cur_meta:
+                    updated = self.update_paygate_invoice_metadata(out["invoice_id"], merged)
+                    if updated:
+                        return updated
+            out["metadata"] = cur_meta
+            return out
+        return self.create_paygate_invoice(
+            title=clean_title,
+            amount_usd=float(amount_usd),
+            network=clean_net,
+            merchant_wallet=clean_wal,
+            ttl_minutes=ttl_minutes,
+            redirect_url=redirect_url,
+            metadata=metadata,
+        )
+
     def mark_paygate_invoice_paid(
         self,
         invoice_id: str,
@@ -1096,6 +1159,69 @@ class StudioLedger:
         out = dict(row)
         out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
         return out
+
+    def update_paygate_invoice_metadata(self, invoice_id: str, metadata: dict[str, Any]) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE paygate_invoices SET metadata_json = ? WHERE invoice_id = ?",
+                (json.dumps(metadata), invoice_id.strip()),
+            )
+            row = conn.execute("SELECT * FROM paygate_invoices WHERE invoice_id = ?", (invoice_id.strip(),)).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
+        return out
+
+    def find_or_create_paygate_invoice(
+        self,
+        *,
+        title: str,
+        amount_usd: float,
+        network: str,
+        merchant_wallet: str,
+        ttl_minutes: int = 60,
+        redirect_url: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        clean_title = title.strip()[:140]
+        clean_net = network.strip().lower()[:24]
+        clean_wal = merchant_wallet.strip()[:120]
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM paygate_invoices
+                WHERE status = 'pending'
+                  AND network = ?
+                  AND lower(merchant_wallet) = lower(?)
+                  AND ABS(amount_usd - ?) < 0.001
+                  AND title = ?
+                  AND expires_at > ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (clean_net, clean_wal, float(amount_usd), clean_title, now_iso),
+            ).fetchone()
+        if row:
+            out = dict(row)
+            cur_meta = json.loads(out.pop("metadata_json") or "{}")
+            if metadata:
+                merged = {**cur_meta, **metadata}
+                if merged != cur_meta:
+                    updated = self.update_paygate_invoice_metadata(out["invoice_id"], merged)
+                    if updated:
+                        return updated
+            out["metadata"] = cur_meta
+            return out
+        return self.create_paygate_invoice(
+            title=clean_title,
+            amount_usd=float(amount_usd),
+            network=clean_net,
+            merchant_wallet=clean_wal,
+            ttl_minutes=ttl_minutes,
+            redirect_url=redirect_url,
+            metadata=metadata,
+        )
 
     def get_stats(self) -> dict[str, Any]:
         with self._connect() as conn:
