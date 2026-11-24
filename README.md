@@ -1,22 +1,23 @@
-# PayGate USDT v2.3 — Non-Custodial Stablecoin Payment Gateway, Subscriptions & MCP Server
+# PayGate USDT v2.4 — Non-Custodial Stablecoin Payment Gateway, Subscriptions & 8-Tool MCP Server
 
 [![CI](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml)
+[![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzeLich%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzeLich)
 [![PayGate USDT MCP server](https://glama.ai/mcp/servers/EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/servers/EzeLich/paygate-usdt)
 [![PayGate USDT MCP connector](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://python.org)
 [![Protocol: x402 v2](https://img.shields.io/badge/Protocol-x402%20v2-ff6600.svg)](https://chainguard-studio-production.up.railway.app/.well-known/x402.json)
-[![MCP Native](https://img.shields.io/badge/MCP-Streamable%20HTTP-38bdf8.svg)](https://chainguard-studio-production.up.railway.app/mcp)
+[![MCP Native](https://img.shields.io/badge/MCP-Streamable%20HTTP%202025--06--18-38bdf8.svg)](https://chainguard-studio-production.up.railway.app/paygate/mcp)
 [![Custody: Zero](https://img.shields.io/badge/Custody-0%25%20Non--Custodial-10b981.svg)](https://chainguard-studio-production.up.railway.app/paygate)
 
-**Accept USDT & USDC across 6 blockchains straight to your own self-custody wallet — with Hosted Checkout Invoices, HMAC-SHA256 Signed Webhooks, FastAPI `HTTP 402` (`x402 v2`) API Paywalls, Automated Telegram VIP Groups, and an AI-Agent MCP Server.**
+**Accept USDT & USDC across 6 blockchains straight to your own self-custody wallet — with Hosted Checkout Invoices, HMAC-SHA256 Signed Webhooks, FastAPI `HTTP 402` (`x402 v2`) API Paywalls, Automated Telegram VIP Groups, and an 8-Tool AI-Agent MCP Server (`2025-06-18` with full `annotations` & `outputSchema`).**
 
 No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut.
 
 - 🌐 **Live Cloud Sandbox & Demo:** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
 - 🤖 **Live Telegram VIP Bot Demo:** [@ChainGuardVaultBot (`?start=vip`)](https://t.me/ChainGuardVaultBot?start=vip)
-- 🧠 **Live MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/mcp` (`create_usdt_invoice`, `verify_usdt_invoice`)
-- 🛡️ **Sister 14-Tool Web3 Security & Vault Recovery MCP (`EzeLich/chainguard-mcp`):** [https://github.com/EzeLich/chainguard-mcp](https://github.com/EzeLich/chainguard-mcp)
+- 🧠 **Live Dedicated MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/paygate/mcp` (`create_usdt_invoice`, `get_usdt_invoice`, `list_usdt_invoices`, `verify_usdt_invoice`, `expire_usdt_invoice`, `check_usdt_subscription`, `verify_onchain_transfer`, `build_x402_paywall_challenge`)
+- 🛡️ **Sister 15-Tool Web3 Security & Vault Recovery MCP (`EzeLich/chainguard-mcp`):** [https://github.com/EzeLich/chainguard-mcp](https://github.com/EzeLich/chainguard-mcp)
 
 ---
 

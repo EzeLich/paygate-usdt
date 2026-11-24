@@ -233,6 +233,32 @@ class PayGateClient:
     def get_invoice(self, invoice_id: str) -> dict[str, Any]:
         return self._request(f"/api/v1/paygate/invoices/{invoice_id}", method="GET")
 
+    def list_invoices(
+        self,
+        *,
+        merchant_wallet: str = "",
+        status: str = "",
+        customer_ref: str = "",
+        limit: int = 25,
+    ) -> dict[str, Any]:
+        import urllib.parse
+
+        qs = urllib.parse.urlencode(
+            {
+                "merchant_wallet": merchant_wallet.strip(),
+                "status": status.strip().lower(),
+                "customer_ref": customer_ref.strip(),
+                "limit": int(limit),
+            }
+        )
+        return self._request(f"/api/v1/paygate/invoices?{qs}", method="GET")
+
+    def expire_invoice(self, invoice_id: str, merchant_wallet: str = "") -> dict[str, Any]:
+        import urllib.parse
+
+        qs = f"?{urllib.parse.urlencode({'merchant_wallet': merchant_wallet.strip()})}" if merchant_wallet.strip() else ""
+        return self._request(f"/api/v1/paygate/invoices/{invoice_id}/expire{qs}", method="POST", payload={})
+
     def verify_invoice(self, invoice_id: str, tx_hash: str) -> dict[str, Any]:
         return self._request(
             f"/api/v1/paygate/invoices/{invoice_id}/verify",

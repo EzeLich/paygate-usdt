@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.EzeLich/paygate-usdt",
   "title": "PayGate USDT Payment Gateway MCP",
-  "description": "Non-custodial multi-chain USDT/USDC payment gateway, recurring subscriptions & x402 MCP tools.",
-  "version": "2.3.2",
+  "description": "8-tool non-custodial 6-chain USDT/USDC payment gateway: invoice CRUD, subscriptions & x402 paywalls.",
+  "version": "2.4.0",
   "websiteUrl": "https://chainguard-studio-production.up.railway.app/paygate",
   "repository": {
     "url": "https://github.com/EzeLich/paygate-usdt",

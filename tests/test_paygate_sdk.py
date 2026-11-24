@@ -234,9 +234,18 @@ def test_stdio_mcp_jsonrpc_and_cli(monkeypatch, capsys):
     assert handle_mcp_jsonrpc({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
 
     tl = handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-    tool_names = [t["name"] for t in tl["result"]["tools"]]
+    tools = tl["result"]["tools"]
+    tool_names = [t["name"] for t in tools]
+    assert len(tools) == 8
     assert "create_usdt_invoice" in tool_names
-    assert "verify_onchain_tx" in tool_names
+    assert "list_usdt_invoices" in tool_names
+    assert "expire_usdt_invoice" in tool_names
+    assert "verify_onchain_transfer" in tool_names
+    assert "build_x402_paywall_challenge" in tool_names
+    for t in tools:
+        assert "annotations" in t and "outputSchema" in t
+        for p_name, p_schema in t["inputSchema"].get("properties", {}).items():
+            assert p_schema.get("description"), f"Missing description on {t['name']}.{p_name}"
 
     monkeypatch.setattr(
         PayGateClient,
