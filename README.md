@@ -117,6 +117,38 @@ result = verifier.verify(
 print(result.verified, result.amount_usd, result.token)
 ```
 
+### 4. CLI & Local Stdio MCP Server (Claude Desktop / Cursor / OpenCode)
+
+Run an instant hosted checkout link directly from your terminal:
+
+```bash
+pip install -e .
+paygate-usdt invoice --title "VIP Access" --amount 49 --network polygon --wallet 0xYourWallet
+paygate-usdt verify-tx --network bsc --tx 0x... --amount 199 --wallet 0xYourWallet
+```
+
+Or connect PayGate USDT as a local Stdio MCP server (`mcpServers` config):
+
+```json
+{
+  "mcpServers": {
+    "paygate-usdt": {
+      "command": "python",
+      "args": ["-m", "paygate_sdk", "mcp"]
+    }
+  }
+}
+```
+
+### 5. Runnable Examples & Docker
+
+- [`examples/fastapi_x402_demo.py`](examples/fastapi_x402_demo.py) — FastAPI paywall route protected by `@require_usdt_payment`
+- [`examples/webhook_receiver_demo.py`](examples/webhook_receiver_demo.py) — FastAPI receiver verifying `X-PayGate-Signature` (`HMAC-SHA256`)
+
+```bash
+docker compose up --build
+```
+
 ---
 
 ## Run Tests Locally
