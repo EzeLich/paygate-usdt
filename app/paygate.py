@@ -381,12 +381,51 @@ def sweep_expired_paygate_members(ledger: StudioLedger) -> dict[str, Any]:
     return {"checked": processed, "kicked": kicked, "timestamp": now_iso}
 
 
-def render_paygate_landing_html(base: str, stats: dict[str, Any]) -> str:
+def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "en") -> str:
     evm_addr = html.escape(StudioConfig.PHANTOM_EVM_ADDRESS)
     sol_addr = html.escape(StudioConfig.PHANTOM_SOL_ADDRESS)
-    return f"""<!DOCTYPE html><html lang="es"><head>
+    is_es = (lang or "en").strip().lower().startswith("es")
+    t = {
+        "badge": "PAYGATE USDT · 0% COMMISSION · DIRECT SELF-CUSTODY WALLET" if not is_es else "PAYGATE USDT · 0% COMISION POR VENTA · DIRECTO A TU WALLET",
+        "title": "PayGate USDT — Monetize Private Telegram Groups & Digital Goods in USDT (No Stripe, No KYC)" if not is_es else "PayGate USDT — Cobrá tu Canal VIP o Producto Digital en USDT sin Banco ni Whop",
+        "h1": 'Monetize Private Telegram Groups & Digital Products in USDT — <span style="color:#10b981;">Zero Stripe, Zero Banks, Zero KYC</span>.' if not is_es else 'Cobrá tu Canal VIP de Telegram o Productos Digitales en USDT — <span style="color:#10b981;">sin banco, sin monotributo ni Whop</span>.',
+        "sub": "Members pay in <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base, or Solana)</strong> straight to your Phantom, Trust, MetaMask, or exchange wallet. The bot verifies transactions on-chain in seconds, issues single-use invite links, and auto-removes expired members." if not is_es else "Tus miembros pagan en <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base o Solana)</strong> directo a tu billetera Phantom, Trust, Binance o Bitget. El bot verifica la transaccion on-chain en segundos, entrega un enlace privado de 1 solo uso y expulsa automatico al vencer el mes.",
+        "cta1": "⚡ Connect My Bot Free (60s)" if not is_es else "⚡ Conectar mi Bot Gratis (60 seg)",
+        "cta2": "👀 Live Telegram Demo" if not is_es else "👀 Probar Demo en Telegram",
+        "cta3": "👑 Unlock Unlimited ($29/mo or $79)" if not is_es else "👑 Activar Ilimitado ($29/mes o $79 unico)",
+        "c1k": "1 · NON-CUSTODIAL" if not is_es else "1 · CERO INTERMEDIARIOS",
+        "c1t": "100% direct to your wallet" if not is_es else "100% directo a tu wallet",
+        "c1b": "Funds never touch our wallet or a bank. Every payment settles directly from buyer to your own USDT/USDC address." if not is_es else "La plata nunca pasa por nuestra cuenta ni por un banco. El pago va directo de la wallet de tu comprador a tu propia direccion USDT/USDC.",
+        "c2k": "2 · ZERO MANUAL ADMIN" if not is_es else "2 · CERO TRABAJO MANUAL",
+        "c2t": "1-use links + auto-kick" if not is_es else "Links únicos + expulsión automática",
+        "c2b": "Stop checking screenshots by hand. Every transfer is verified via RPC with anti-replay protection and automated expiry kicks." if not is_es else "Basta de pedir capturas por privado y llevar planillas. Cada compra valida el Tx Hash on-chain y genera un link privado de 1 solo ingreso.",
+        "c3k": "3 · LIVE IN 60 SECONDS" if not is_es else "3 · LISTO EN 60 SEGUNDOS",
+        "c3t": "Zero code required" if not is_es else "Sin programar nada",
+        "c3b": f"Create a bot in @BotFather, paste your token below, add it as admin to your VIP group, and start collecting. ({stats['total_bots']} bots · ${stats['total_volume_usdt']} USDT verified)" if not is_es else f"Creas tu bot en @BotFather, pegas el token abajo, agregas el bot como admin en tu canal privado y ya estas cobrando. ({stats['total_bots']} bots creados · ${stats['total_volume_usdt']} USDT verificados)",
+        "setup_h": "🛠️ Connect Your VIP Bot in 60s (Free up to 3 members)" if not is_es else "🛠️ Conecta tu Bot VIP en 60 segundos (Gratis hasta 3 miembros)",
+        "setup_p": "First step: open <strong>@BotFather</strong> in Telegram → send <code>/newbot</code> → copy the token. For private channels, make the bot an admin with Invite &amp; Ban permissions." if not is_es else "Paso previo: en Telegram abrí <strong>@BotFather</strong> → enviá <code>/newbot</code> → copiá el token. Si tenés canal VIP, agregá tu bot como administrador con permiso para invitar y restringir usuarios.",
+        "l_name": "Community / Product Name" if not is_es else "Nombre de tu Comunidad / Producto",
+        "l_tok": "Bot Token (@BotFather)" if not is_es else "Token de tu Bot (@BotFather)",
+        "l_net": "Payout Network (0% fee)" if not is_es else "Red donde queres cobrar (0% comision)",
+        "l_wal": "Your Payout Wallet (0x... or Solana)" if not is_es else "Tu Wallet para recibir pagos (0x... o Solana)",
+        "l_chan": "Private Channel/Group ID (optional, e.g. -1001234567890)" if not is_es else "ID de tu Canal/Grupo VIP (opcional, ej: -1001234567890)",
+        "l_price": "Monthly Price (30 days) in USDT" if not is_es else "Precio Plan Mensual (30 dias) en USDT",
+        "l_deliv": "Post-payment bonus link or instructions (optional — ideal for scripts, courses, files)" if not is_es else "Entrega extra o link privado tras pagar (opcional — ideal para cursos, scripts o archivos)",
+        "btn_go": "⚡ Launch My Bot Now" if not is_es else "⚡ Activar mi Bot Ahora",
+        "up_h": "👑 Transparent Pricing (Direct On-Chain USDC/USDT)" if not is_es else "👑 Planes PayGate USDT (Sin suscripción bancaria)",
+        "f_t": "FREE TRIAL" if not is_es else "PRUEBA GRATIS",
+        "f_b": "Up to 3 active paid members so you can test live RPC verification before paying anything." if not is_es else "Hasta 3 miembros activos reales para probar tu bot y validar cobros on-chain antes de pagar un centavo.",
+        "p_t": "HOSTED PRO ($29/mo)" if not is_es else "PRO HOSTEADO ($29/mes)",
+        "p_b": "Unlimited members, 0% revenue cut, expiry DMs, and 24/7 automated channel kick on our cloud." if not is_es else "Miembros ilimitados, 0% comision sobre ventas, alertas de vencimiento y expulsion automatica 24/7 en nuestro servidor.",
+        "l_t": "LIFETIME LICENSE ($79)" if not is_es else "LICENCIA COMPLETA ($79)",
+        "l_b": "Unlimited members forever with zero monthly fees + white-label branding." if not is_es else "Ilimitado para siempre sin abono mensual + marca blanca para tu comunidad.",
+        "up_box": f"<strong>To upgrade any bot to Pro ($29) or Lifetime ($79):</strong><br/>1) Send $29 or $79 (USDT/USDC) on <strong>Polygon / BSC / Arbitrum / Base</strong> to: <code>{evm_addr}</code><br/>&nbsp;&nbsp;&nbsp;&nbsp;or on <strong>Solana</strong> to: <code>{sol_addr}</code><br/>2) Open your bot's admin panel link above and paste the Tx Hash for instant activation." if not is_es else f"<strong>Para activar Pro ($29) o Licencia ($79) en cualquier bot ya creado:</strong><br/>1) Envia $29 o $79 (USDT/USDC) por <strong>Polygon / BSC / Arbitrum / Base</strong> a: <code>{evm_addr}</code><br/>&nbsp;&nbsp;&nbsp;&nbsp;o por <strong>Solana</strong> a: <code>{sol_addr}</code><br/>2) Abrí el Panel de tu bot (el link que te damos arriba al activarlo) y pegá el Tx Hash para desbloqueo instantaneo en 5 segundos.",
+    }
+    alt_lang = "en" if is_es else "es"
+    alt_lbl = "English" if is_es else "Español"
+    return f"""<!DOCTYPE html><html lang="{'es' if is_es else 'en'}"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>PayGate USDT — Cobrá tu Canal VIP o Producto Digital en USDT sin Banco ni Whop</title>
+<title>{t['title']}</title>
 <style>
   *{{box-sizing:border-box}}
   body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,-apple-system,sans-serif;line-height:1.55}}
@@ -404,50 +443,56 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any]) -> str:
   .ok{{color:#34d399;font-weight:700}} .err{{color:#fca5a5;font-weight:700}}
 </style></head>
 <body><div class="wrap">
-  <span class="badge">PAYGATE USDT · 0% COMISION POR VENTA · DIRECTO A TU WALLET</span>
-  <h1>Cobrá tu Canal VIP de Telegram o Productos Digitales en USDT — <span style="color:#10b981;">sin banco, sin monotributo ni Whop</span>.</h1>
-  <p class="sub">Tus miembros pagan en <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base o Solana)</strong> directo a tu billetera Phantom, Trust, Binance o Bitget. El bot verifica la transaccion on-chain en segundos, entrega un enlace privado de 1 solo uso y expulsa automatico al vencer el mes.</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <span class="badge">{t['badge']}</span>
+    <div style="display:flex;gap:8px;">
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/poly">🐋 PolyPulse Whale Radar</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/paygate?lang={alt_lang}">🌐 {alt_lbl}</a>
+    </div>
+  </div>
+  <h1>{t['h1']}</h1>
+  <p class="sub">{t['sub']}</p>
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-    <a class="btn" href="#setup">⚡ Conectar mi Bot Gratis (60 seg)</a>
-    <a class="btn2" href="https://t.me/ChainGuardVaultBot?start=vip" target="_blank">👀 Probar Demo en Telegram</a>
-    <a class="btn2" href="#upgrade">👑 Activar Ilimitado ($29/mes o $79 unico)</a>
+    <a class="btn" href="#setup">{t['cta1']}</a>
+    <a class="btn2" href="https://t.me/ChainGuardVaultBot?start=vip" target="_blank">{t['cta2']}</a>
+    <a class="btn2" href="#upgrade">{t['cta3']}</a>
   </div>
 
   <div class="grid">
     <div class="card">
-      <div style="color:#10b981;font-weight:800;font-size:.82rem;">1 · CERO INTERMEDIARIOS</div>
-      <h3 style="margin:6px 0;">100% directo a tu wallet</h3>
-      <p style="color:#94a3b8;font-size:.9rem;margin:0;">La plata nunca pasa por nuestra cuenta ni por un banco. El pago va directo de la wallet de tu comprador a tu propia direccion USDT/USDC.</p>
+      <div style="color:#10b981;font-weight:800;font-size:.82rem;">{t['c1k']}</div>
+      <h3 style="margin:6px 0;">{t['c1t']}</h3>
+      <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c1b']}</p>
     </div>
     <div class="card">
-      <div style="color:#10b981;font-weight:800;font-size:.82rem;">2 · CERO TRABAJO MANUAL</div>
-      <h3 style="margin:6px 0;">Links únicos + expulsión automática</h3>
-      <p style="color:#94a3b8;font-size:.9rem;margin:0;">Basta de pedir capturas por privado y llevar planillas. Cada compra valida el Tx Hash on-chain y genera un link privado de 1 solo ingreso.</p>
+      <div style="color:#10b981;font-weight:800;font-size:.82rem;">{t['c2k']}</div>
+      <h3 style="margin:6px 0;">{t['c2t']}</h3>
+      <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c2b']}</p>
     </div>
     <div class="card">
-      <div style="color:#10b981;font-weight:800;font-size:.82rem;">3 · LISTO EN 60 SEGUNDOS</div>
-      <h3 style="margin:6px 0;">Sin programar nada</h3>
-      <p style="color:#94a3b8;font-size:.9rem;margin:0;">Creas tu bot en @BotFather, pegas el token abajo, agregas el bot como admin en tu canal privado y ya estas cobrando. ({stats['total_bots']} bots creados · ${stats['total_volume_usdt']} USDT verificados)</p>
+      <div style="color:#10b981;font-weight:800;font-size:.82rem;">{t['c3k']}</div>
+      <h3 style="margin:6px 0;">{t['c3t']}</h3>
+      <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c3b']}</p>
     </div>
   </div>
 
   <div class="card" id="setup" style="margin-top:20px;border-color:#10b981;">
-    <h2 style="margin:0 0 6px;">🛠️ Conecta tu Bot VIP en 60 segundos (Gratis hasta 3 miembros)</h2>
-    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">Paso previo: en Telegram abrí <strong>@BotFather</strong> → enviá <code>/newbot</code> → copiá el token. Si tenés canal VIP, agregá tu bot como administrador con permiso para invitar y restringir usuarios.</p>
+    <h2 style="margin:0 0 6px;">{t['setup_h']}</h2>
+    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{t['setup_p']}</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
       <div>
-        <label>Nombre de tu Comunidad / Producto</label>
-        <input id="bName" placeholder="Ej: Señales Pro Trading VIP"/>
+        <label>{t['l_name']}</label>
+        <input id="bName" placeholder="Alpha Signals VIP"/>
       </div>
       <div>
-        <label>Token de tu Bot (@BotFather)</label>
+        <label>{t['l_tok']}</label>
         <input id="bToken" placeholder="1234567890:AAF..."/>
       </div>
       <div>
-        <label>Red donde queres cobrar (0% comision)</label>
+        <label>{t['l_net']}</label>
         <select id="bNet">
-          <option value="polygon">Polygon — USDT / USDC (recomendado)</option>
+          <option value="polygon">Polygon — USDT / USDC</option>
           <option value="bsc">BNB Smart Chain BEP20 — USDT / USDC</option>
           <option value="arbitrum">Arbitrum — USDT / USDC</option>
           <option value="base">Base — USDC / USDT</option>
@@ -455,51 +500,48 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any]) -> str:
         </select>
       </div>
       <div>
-        <label>Tu Wallet para recibir pagos (0x... o Solana)</label>
-        <input id="bWallet" placeholder="0x... o direccion Solana"/>
+        <label>{t['l_wal']}</label>
+        <input id="bWallet" placeholder="0x... or Solana address"/>
       </div>
       <div>
-        <label>ID de tu Canal/Grupo VIP (opcional, ej: -1001234567890)</label>
-        <input id="bChan" placeholder="-100... (o dejalo vacio si entregas un link/archivo)"/>
+        <label>{t['l_chan']}</label>
+        <input id="bChan" placeholder="-100..."/>
       </div>
       <div>
-        <label>Precio Plan Mensual (30 dias) en USDT</label>
+        <label>{t['l_price']}</label>
         <input id="bPrice" type="number" step="0.5" value="25"/>
       </div>
     </div>
-    <label>Entrega extra o link privado tras pagar (opcional — ideal para cursos, scripts o archivos)</label>
-    <input id="bDeliv" placeholder="Ej: https://t.me/... o link de descarga / instrucciones"/>
+    <label>{t['l_deliv']}</label>
+    <input id="bDeliv" placeholder="https://... or instructions"/>
     <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <button class="btn" onclick="crearBot()">⚡ Activar mi Bot Ahora</button>
+      <button class="btn" onclick="crearBot()">{t['btn_go']}</button>
       <span id="setupMsg" style="font-size:.9rem;"></span>
     </div>
     <div id="setupResult" style="margin-top:12px;"></div>
   </div>
 
   <div class="card" id="upgrade" style="margin-top:18px;">
-    <h2 style="margin:0 0 8px;">👑 Planes PayGate USDT (Sin suscripción bancaria)</h2>
+    <h2 style="margin:0 0 8px;">{t['up_h']}</h2>
     <div class="grid" style="margin:12px 0;">
       <div class="card" style="background:#070b14;">
-        <div style="font-weight:800;color:#94a3b8;">PRUEBA GRATIS</div>
+        <div style="font-weight:800;color:#94a3b8;">{t['f_t']}</div>
         <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$0 <span style="font-size:.85rem;color:#94a3b8;">USDT</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">Hasta 3 miembros activos reales para probar tu bot y validar cobros on-chain antes de pagar un centavo.</p>
+        <p style="font-size:.86rem;color:#94a3b8;">{t['f_b']}</p>
       </div>
       <div class="card" style="background:#070b14;border-color:#10b981;">
-        <div style="font-weight:800;color:#10b981;">PRO HOSTEADO</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$29 <span style="font-size:.85rem;color:#94a3b8;">USDT / mes</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">Miembros ilimitados, 0% comision sobre ventas, alertas de vencimiento y expulsion automatica 24/7 en nuestro servidor.</p>
+        <div style="font-weight:800;color:#10b981;">{t['p_t']}</div>
+        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$29 <span style="font-size:.85rem;color:#94a3b8;">USDT / mo</span></div>
+        <p style="font-size:.86rem;color:#94a3b8;">{t['p_b']}</p>
       </div>
       <div class="card" style="background:#070b14;border-color:#38bdf8;">
-        <div style="font-weight:800;color:#38bdf8;">LICENCIA COMPLETA</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$79 <span style="font-size:.85rem;color:#94a3b8;">USDT pago unico</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">Ilimitado para siempre sin abono mensual + marca blanca para tu comunidad.</p>
+        <div style="font-weight:800;color:#38bdf8;">{t['l_t']}</div>
+        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$79 <span style="font-size:.85rem;color:#94a3b8;">USDT one-time</span></div>
+        <p style="font-size:.86rem;color:#94a3b8;">{t['l_b']}</p>
       </div>
     </div>
     <div style="background:#070b14;border:1px solid #1e293b;border-radius:10px;padding:14px;font-size:.88rem;">
-      <strong>Para activar Pro ($29) o Licencia ($79) en cualquier bot ya creado:</strong><br/>
-      1) Envia $29 o $79 (USDT/USDC) por <strong>Polygon / BSC / Arbitrum / Base</strong> a: <code>{evm_addr}</code><br/>
-      &nbsp;&nbsp;&nbsp;&nbsp;o por <strong>Solana</strong> a: <code>{sol_addr}</code><br/>
-      2) Abrí el Panel de tu bot (el link que te damos arriba al activarlo) y pegá el Tx Hash para desbloqueo instantaneo en 5 segundos.
+      {t['up_box']}
     </div>
   </div>
 </div>
@@ -507,7 +549,7 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any]) -> str:
 async function crearBot() {{
   const msg = document.getElementById('setupMsg');
   const out = document.getElementById('setupResult');
-  msg.className = ''; msg.textContent = 'Conectando con Telegram...';
+  msg.className = ''; msg.textContent = 'Connecting to Telegram...';
   const r = await fetch('/api/v1/paygate/bots', {{
     method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
     body: JSON.stringify({{
@@ -523,16 +565,16 @@ async function crearBot() {{
   const d = await r.json();
   if (!r.ok) {{
     msg.className = 'err';
-    msg.textContent = d.detail || 'Error al configurar el bot.';
+    msg.textContent = d.detail || 'Setup error.';
     return;
   }}
   msg.className = 'ok';
-  msg.textContent = '¡Bot conectado y funcionando en vivo!';
+  msg.textContent = 'Bot live!';
   const panelUrl = location.origin + d.panel_url;
   out.innerHTML = `<div class="card" style="background:#052e16;border-color:#10b981;">
-    <div>✅ <strong>@${{d.bot.bot_username}}</strong> ya esta online! Probalo ahora: <a style="color:#6ee7b7;font-weight:800;" href="https://t.me/${{d.bot.bot_username}}" target="_blank">t.me/${{d.bot.bot_username}}</a></div>
-    <div style="margin-top:8px;">🔐 <strong>Guarda este link privado de tu Panel de Control:</strong><br/><code>${{panelUrl}}</code></div>
-    <div style="margin-top:8px;"><a class="btn" href="${{panelUrl}}">Abrir mi Panel Ahora →</a></div>
+    <div>✅ <strong>@${{d.bot.bot_username}}</strong> is live: <a style="color:#6ee7b7;font-weight:800;" href="https://t.me/${{d.bot.bot_username}}" target="_blank">t.me/${{d.bot.bot_username}}</a></div>
+    <div style="margin-top:8px;">🔐 <strong>Save your private Admin Panel link:</strong><br/><code>${{panelUrl}}</code></div>
+    <div style="margin-top:8px;"><a class="btn" href="${{panelUrl}}">Open Admin Panel →</a></div>
   </div>`;
 }}
 </script></body></html>"""
