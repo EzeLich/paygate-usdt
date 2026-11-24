@@ -16,24 +16,24 @@ jobs:
       MCP_PUBLISHER_VERSION: v1.8.16
     steps:
       - uses: actions/checkout@v4
-      - uses: sigstore/cosign-installer@v3.8.0
+      - uses: sigstore/cosign-installer@v4.1.2
       - name: Download and verify mcp-publisher
         run: |
           set -euo pipefail
-          archive="mcp-publisher_linux_amd64.tar.gz"
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          archive="mcp-publisher_${os}_${arch}.tar.gz"
           base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
           curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
           curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
           cosign verify-blob \
             --bundle "$archive.sigstore.json" \
-            --certificate-identity-regexp "https://github.com/modelcontextprotocol/registry/.github/workflows/.*" \
-            --certificate-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "$archive"
-          tar xzf "$archive"
-          chmod +x mcp-publisher
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
       - name: Authenticate via GitHub OIDC
         run: ./mcp-publisher login github-oidc
-      - name: Validate and publish server.json
-        run: |
-          ./mcp-publisher validate
-          ./mcp-publisher publish
+      - name: Publish server to Official MCP Registry
+        run: ./mcp-publisher publish
