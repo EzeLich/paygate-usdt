@@ -116,6 +116,7 @@ def _mcp_tools_schema() -> list[dict[str, Any]]:
                 "properties": {
                     "ok": {"type": "boolean"},
                     "invoice": {"type": "object"},
+                    "receipt": {"type": "object"},
                 },
                 "required": ["ok"],
             },
@@ -203,6 +204,7 @@ def _mcp_tools_schema() -> list[dict[str, Any]]:
                 "properties": {
                     "ok": {"type": "boolean"},
                     "invoice": {"type": "object"},
+                    "receipt": {"type": "object"},
                 },
                 "required": ["ok"],
             },
@@ -241,6 +243,7 @@ def _mcp_tools_schema() -> list[dict[str, Any]]:
                 "properties": {
                     "ok": {"type": "boolean"},
                     "invoice": {"type": "object"},
+                    "receipt": {"type": "object"},
                 },
                 "required": ["ok"],
             },
@@ -424,7 +427,11 @@ def handle_mcp_jsonrpc(msg: dict[str, Any], base_url: str = DEFAULT_BASE_URL) ->
                     "resources": {"subscribe": False, "listChanged": False},
                     "prompts": {"listChanged": False},
                 },
-                "serverInfo": {"name": "paygate-usdt", "version": "2.4.0"},
+                "serverInfo": {"name": "paygate-usdt", "version": "2.5.1"},
+                "instructions": (
+                    f"PayGate USDT v2.5.1 — Non-custodial 6-chain USDT/USDC payment gateway MCP (Polygon, BSC, Arbitrum, Base, Ethereum, Solana). "
+                    f"Hosted checkout UI: {base_url}/paygate | Remote Streamable-HTTP MCP: {base_url}/paygate/mcp | B2B Turnkey Setup: {base_url}/paygate#b2b"
+                ),
             },
         }
     if method == "resources/list":

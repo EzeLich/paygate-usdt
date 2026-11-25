@@ -1,6 +1,7 @@
 services:
   paygate:
     build: .
+    command: ["uvicorn", "examples.fastapi_x402_demo:app", "--host", "0.0.0.0", "--port", "8080"]
     ports:
       - "8080:8080"
     env_file:
