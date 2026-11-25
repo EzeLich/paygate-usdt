@@ -1,7 +1,7 @@
 # PayGate USDT v2.6 — Non-Custodial Stablecoin Payment Gateway, Python & TypeScript/Node.js SDKs, `@mcp_tool_paywall` & 8-Tool MCP Server
 
 [![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
-[![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzeLich%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzeLich)
+[![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzequielLech%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzequielLech)
 [![PayGate USDT MCP server](https://glama.ai/mcp/servers/EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/servers/EzeLich/paygate-usdt)
 [![PayGate USDT MCP connector](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

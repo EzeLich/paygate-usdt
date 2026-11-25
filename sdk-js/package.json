@@ -1,6 +1,6 @@
 {
   "name": "paygate-usdt",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Zero-dependency TypeScript/Node.js SDK for non-custodial multi-chain USDT/USDC invoices, HMAC-SHA256 webhooks, x402 v2 Express paywalls, and @modelcontextprotocol/sdk tool monetization.",
   "type": "module",
   "license": "MIT",

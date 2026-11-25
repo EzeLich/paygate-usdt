@@ -390,6 +390,12 @@ def test_mcp_tool_paywall_decorator_free_quota_and_paid_unlock(monkeypatch):
     def get_alpha_signal(symbol: str, customer_ref: str = "", paygate_invoice_id: str = "") -> dict:
         return {"symbol": symbol, "signal": "LONG"}
 
+    monkeypatch.setattr(
+        PayGateClient,
+        "check_subscription",
+        lambda self, **kw: {"ok": True, "active": False, "renewal_url": "https://example.com/pay"},
+    )
+
     # 1. First 2 calls succeed on free tier and include paygate_billing
     r1 = get_alpha_signal(symbol="ETH", customer_ref="agent_7")
     assert r1["signal"] == "LONG"
@@ -400,11 +406,6 @@ def test_mcp_tool_paywall_decorator_free_quota_and_paid_unlock(monkeypatch):
     assert r2["paygate_billing"]["free_calls_remaining"] == 0
 
     # 2. 3rd call hits paywall when subscription is inactive
-    monkeypatch.setattr(
-        PayGateClient,
-        "check_subscription",
-        lambda self, **kw: {"ok": True, "active": False, "renewal_url": "https://example.com/pay"},
-    )
     r3 = get_alpha_signal(symbol="BTC", customer_ref="agent_7")
     assert r3["ok"] is False
     assert "Free MCP tool quota reached" in r3["error"]

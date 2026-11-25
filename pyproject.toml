@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paygate-usdt"
-version = "2.6.0"
+version = "2.6.1"
 description = "Self-hosted & cloud non-custodial USDT/USDC payment gateway with hosted invoices, HMAC-SHA256 webhooks, HTTP 402 (x402 v2) FastAPI & Express paywalls, Python + TypeScript/Node.js SDKs, CLI, Telegram VIP bot, and Stdio/HTTP MCP Server."
 readme = "README.md"
 requires-python = ">=3.10"
