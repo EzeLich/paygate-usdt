@@ -800,21 +800,21 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
         t_net = net_raw if net_raw in ("base", "polygon", "arbitrum", "bsc", "ethereum") else "base"
         tier_switcher_html = (
             '<div style="margin-bottom:14px;padding:11px 13px;background:#070b14;border:1px solid #1e293b;border-radius:10px;">'
-            '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">⚡ INSTANT AUTOMATED ON-SCREEN DELIVERY (NO EMAIL OR SIGNUP NEEDED):</div>'
-            '<div style="font-size:.79rem;color:#cbd5e1;margin-bottom:8px;">Upon 1 block confirmation (~3–5s), this screen automatically detects your transfer and reveals your <code>cg_live_...</code> API / White-Label License Key + cryptographic SHA-256 receipt. Want to test with a smaller tier first? Switch plan in 1 click:</div>'
+            '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">INSTANT AUTOMATED ON-SCREEN DELIVERY (NO EMAIL OR SIGNUP NEEDED):</div>'
+            '<div style="font-size:.79rem;color:#cbd5e1;margin-bottom:8px;">Upon 1 block confirmation (~3–5s), this screen automatically detects your transfer and reveals your <code>cg_live_...</code> API / White-Label License Key + cryptographic SHA-256 receipt. Switch plan in 1 click:</div>'
             '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">⚡ $0.50 · 24h Test Pass (50 calls)</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" style="padding:4px 10px;border-radius:8px;border:1px solid #10b981;color:#6ee7b7;text-decoration:none;font-size:.78rem;font-weight:700;">🚀 $2.00 · 7-Day Pass (250 calls)</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" style="padding:4px 10px;border-radius:8px;border:1px solid #a855f7;color:#d8b4fe;text-decoration:none;font-size:.78rem;font-weight:700;">💎 $9.00 · 30-Day Unlimited</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" style="padding:4px 10px;border-radius:8px;border:1px solid #f59e0b;color:#fcd34d;text-decoration:none;font-size:.78rem;font-weight:700;">👑 $79.00 · Lifetime White-Label</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">$0.50 · 24h Test Pass (50 calls)</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" style="padding:4px 10px;border-radius:8px;border:1px solid #10b981;color:#6ee7b7;text-decoration:none;font-size:.78rem;font-weight:700;">$2.00 · 7-Day Pass (250 calls)</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" style="padding:4px 10px;border-radius:8px;border:1px solid #a855f7;color:#d8b4fe;text-decoration:none;font-size:.78rem;font-weight:700;">$9.00 · 30-Day Unlimited</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" style="padding:4px 10px;border-radius:8px;border:1px solid #f59e0b;color:#fcd34d;text-decoration:none;font-size:.78rem;font-weight:700;">$79.00 · Lifetime White-Label</a>'
             '</div></div>'
         )
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
         btns = []
         if usdt_addr:
-            btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">⚡ 1-Click Pay ${amt} USDT (MetaMask / Rabby / Phantom)</button>""")
+            btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">Pay ${amt} USDT (Browser Wallet)</button>""")
         if usdc_addr:
-            btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">⚡ 1-Click Pay ${amt} USDC</button>""")
+            btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">Pay ${amt} USDC (Browser Wallet)</button>""")
         if btns:
             one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
 
@@ -822,7 +822,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
 
     paid_key_html = (
         f"""<div style="margin-top:10px;background:#020617;border:1px solid #38bdf8;border-radius:10px;padding:12px;">
-          <div style="font-size:.84rem;color:#7dd3fc;font-weight:800;">🔑 Your Instant MCP &amp; Pro API License Key Is Active ({api_pass.get('calls_remaining', 1000)} calls · Plan: {html.escape(str(api_pass.get('plan_id') or 'pro_pass'))}):</div>
+          <div style="font-size:.84rem;color:#7dd3fc;font-weight:800;">Your Instant MCP &amp; Pro API License Key Is Active ({api_pass.get('calls_remaining', 1000)} calls · Plan: {html.escape(str(api_pass.get('plan_id') or 'pro_pass'))}):</div>
           <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
             <code style="flex:1;padding:8px 10px;display:block;">{api_key_esc}</code>
             <button class="btn" onclick="navigator.clipboard.writeText('{api_key_esc}');this.textContent='Copied Key!'">Copy Key</button>
@@ -835,11 +835,11 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
 
     paid_block = (
         f"""<div class="card" style="background:#052e16;border-color:#10b981;margin-top:16px;">
-          <div style="font-weight:800;color:#6ee7b7;">✅ Payment Confirmed On-Chain</div>
+          <div style="font-weight:800;color:#6ee7b7;">Payment Confirmed On-Chain</div>
           <div style="font-size:.88rem;margin-top:6px;">TX: <code>{tx_esc}</code></div>
           {paid_key_html}
           <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
-            <a class="btn2" href="{receipt_url}">🧾 View Verifiable SHA-256 Receipt</a>
+            <a class="btn2" href="{receipt_url}">View Verifiable SHA-256 Receipt</a>
             {f'<a class="btn" href="{redir}">Continue to Merchant →</a>' if redir else ''}
           </div>
         </div>"""
@@ -865,16 +865,16 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
           </div>
           <label style="margin-top:14px;">2. Verify payment (auto-detects your transfer on-chain every 12s or click below):</label>
           <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-            <button class="btn" onclick="autoDetectInv(false)">🔍 I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
+            <button class="btn" onclick="autoDetectInv(false)">I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
             <input id="invTx" style="flex:1;min-width:220px;" placeholder="Or paste 0x... / Solana tx signature"/>
             <button class="btn2" onclick="verifyInv()">Verify by TX Hash</button>
           </div>
-          <div id="invMsg" style="margin-top:10px;font-size:.9rem;color:#38bdf8;">⏳ Listening for on-chain transfer to {wallet[:10]}... on {net}...</div>
+          <div id="invMsg" style="margin-top:10px;font-size:.9rem;color:#38bdf8;">Listening for on-chain transfer to {wallet[:10]}... on {net}...</div>
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e293b;font-size:.8rem;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <span>Short on {net} USDT/USDC?</span>
-            <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">🔄 Swap Any Token or Dust into USDT/USDC in 1 Click →</a>
+            <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">Swap Any Token or Dust into USDT/USDC →</a>
           </div>
         </div>"""
     )
@@ -1026,7 +1026,7 @@ def render_paygate_receipt_html(base: str, invoice: dict[str, Any]) -> str:
   code{{background:#020617;padding:3px 7px;border-radius:6px;color:#6ee7b7;font-size:.82rem;word-break:break-all}}
   .row{{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #1e293b;padding:8px 0;font-size:.9rem}}
 </style></head><body><div class="wrap"><div class="card">
-  <div style="color:#10b981;font-weight:900;font-size:.82rem;">⚡ VERIFIED ON-CHAIN RECEIPT</div>
+  <div style="color:#10b981;font-weight:900;font-size:.82rem;">VERIFIED ON-CHAIN RECEIPT</div>
   <h1 style="margin:6px 0 14px;font-size:1.5rem;">{title}</h1>
   <div class="row"><span>Invoice ID</span><code>{inv_id}</code></div>
   <div class="row"><span>Status</span><strong>{html.escape(str(rec['status']).upper())}</strong></div>
@@ -1072,9 +1072,9 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
         "title": "PayGate USDT — Monetize Private Telegram Groups & Digital Goods in USDT (No Stripe, No KYC)" if not is_es else "PayGate USDT — Cobrá tu Canal VIP o Producto Digital en USDT sin Banco ni Whop",
         "h1": 'Monetize Private Telegram Groups & Digital Products in USDT — <span style="color:#10b981;">Zero Stripe, Zero Banks, Zero KYC</span>.' if not is_es else 'Cobrá tu Canal VIP de Telegram o Productos Digitales en USDT — <span style="color:#10b981;">sin banco, sin monotributo ni Whop</span>.',
         "sub": "Members pay in <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base, or Solana)</strong> straight to your Phantom, Trust, MetaMask, or exchange wallet. The bot verifies transactions on-chain in seconds, issues single-use invite links, and auto-removes expired members." if not is_es else "Tus miembros pagan en <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base o Solana)</strong> directo a tu billetera Phantom, Trust, Binance o Bitget. El bot verifica la transaccion on-chain en segundos, entrega un enlace privado de 1 solo uso y expulsa automatico al vencer el mes.",
-        "cta1": "⚡ Connect My Bot Free (60s)" if not is_es else "⚡ Conectar mi Bot Gratis (60 seg)",
-        "cta2": "👀 Live Telegram Demo" if not is_es else "👀 Probar Demo en Telegram",
-        "cta3": "👑 Unlock Unlimited ($29/mo or $79)" if not is_es else "👑 Activar Ilimitado ($29/mes o $79 unico)",
+        "cta1": "Connect My Bot Free (60s)" if not is_es else "Conectar mi Bot Gratis (60 seg)",
+        "cta2": "Live Telegram Demo" if not is_es else "Probar Demo en Telegram",
+        "cta3": "Unlock Unlimited ($29/mo or $79)" if not is_es else "Activar Ilimitado ($29/mes o $79 unico)",
         "c1k": "1 · NON-CUSTODIAL" if not is_es else "1 · CERO INTERMEDIARIOS",
         "c1t": "100% direct to your wallet" if not is_es else "100% directo a tu wallet",
         "c1b": "Funds never touch our wallet or a bank. Every payment settles directly from buyer to your own USDT/USDC address." if not is_es else "La plata nunca pasa por nuestra cuenta ni por un banco. El pago va directo de la wallet de tu comprador a tu propia direccion USDT/USDC.",
@@ -1084,7 +1084,7 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
         "c3k": "3 · LIVE IN 60 SECONDS" if not is_es else "3 · LISTO EN 60 SEGUNDOS",
         "c3t": "Zero code required" if not is_es else "Sin programar nada",
         "c3b": f"Create a bot in @BotFather, paste your token below, add it as admin to your VIP group, and start collecting. ({stats['total_bots']} bots · ${stats['total_volume_usdt']} USDT verified)" if not is_es else f"Creas tu bot en @BotFather, pegas el token abajo, agregas el bot como admin en tu canal privado y ya estas cobrando. ({stats['total_bots']} bots creados · ${stats['total_volume_usdt']} USDT verificados)",
-        "setup_h": "🛠️ Connect Your VIP Bot in 60s (Free up to 3 members)" if not is_es else "🛠️ Conecta tu Bot VIP en 60 segundos (Gratis hasta 3 miembros)",
+        "setup_h": "Connect Your VIP Bot in 60s (Free up to 3 members)" if not is_es else "Conecta tu Bot VIP en 60 segundos (Gratis hasta 3 miembros)",
         "setup_p": "First step: open <strong>@BotFather</strong> in Telegram → send <code>/newbot</code> → copy the token. For private channels, make the bot an admin with Invite &amp; Ban permissions." if not is_es else "Paso previo: en Telegram abrí <strong>@BotFather</strong> → enviá <code>/newbot</code> → copiá el token. Si tenés canal VIP, agregá tu bot como administrador con permiso para invitar y restringir usuarios.",
         "l_name": "Community / Product Name" if not is_es else "Nombre de tu Comunidad / Producto",
         "l_tok": "Bot Token (@BotFather)" if not is_es else "Token de tu Bot (@BotFather)",
@@ -1093,8 +1093,8 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
         "l_chan": "Private Channel/Group ID (optional, e.g. -1001234567890)" if not is_es else "ID de tu Canal/Grupo VIP (opcional, ej: -1001234567890)",
         "l_price": "Monthly Price (30 days) in USDT" if not is_es else "Precio Plan Mensual (30 dias) en USDT",
         "l_deliv": "Post-payment bonus link or instructions (optional — ideal for scripts, courses, files)" if not is_es else "Entrega extra o link privado tras pagar (opcional — ideal para cursos, scripts o archivos)",
-        "btn_go": "⚡ Launch My Bot Now" if not is_es else "⚡ Activar mi Bot Ahora",
-        "up_h": "👑 Transparent Pricing (Direct On-Chain USDC/USDT)" if not is_es else "👑 Planes PayGate USDT (Sin suscripción bancaria)",
+        "btn_go": "Launch My Bot Now" if not is_es else "Activar mi Bot Ahora",
+        "up_h": "Transparent Pricing (Direct On-Chain USDC/USDT)" if not is_es else "Planes PayGate USDT (Sin suscripción bancaria)",
         "f_t": "FREE TRIAL" if not is_es else "PRUEBA GRATIS",
         "f_b": "Up to 3 active paid members so you can test live RPC verification before paying anything." if not is_es else "Hasta 3 miembros activos reales para probar tu bot y validar cobros on-chain antes de pagar un centavo.",
         "p_t": "HOSTED PRO ($29/mo)" if not is_es else "PRO HOSTEADO ($29/mes)",
