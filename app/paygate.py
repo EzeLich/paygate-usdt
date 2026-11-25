@@ -601,27 +601,36 @@ def verify_and_settle_invoice(
                 meta["customer_ref"] = customer_ref
             meta_changed = True
         paid_val = float(updated["paid_amount_usd"])
-        if is_studio_merchant and paid_val >= 0.45 and bool(meta.get("issue_pass")):
+        if is_studio_merchant and paid_val >= 0.45:
             if paid_val < 1.99:
                 pass_calls = 50
                 default_days = 1
+                plan_tag = "paygate_micro_24h_pass"
             elif paid_val < 5.0:
                 pass_calls = 250
                 default_days = 7
+                plan_tag = "paygate_starter_7d_pass"
             elif paid_val < 29.0:
                 pass_calls = 1000
                 default_days = 30
-            else:
+                plan_tag = "paygate_pro_30d_pass"
+            elif paid_val < 79.0:
                 pass_calls = 5000
                 default_days = 90
+                plan_tag = "paygate_hosted_pro_90d"
+            else:
+                pass_calls = 25000
+                default_days = 3650
+                plan_tag = "paygate_lifetime_whitelabel_license"
             pass_days = billing_days if billing_days > 0 else default_days
             pass_obj = ledger.issue_api_pass(
-                plan_id="paygate_instant_pass",
+                plan_id=plan_tag,
                 tx_hash=tx,
                 calls=pass_calls,
                 days=pass_days,
                 owner_wallet=res.sender,
             )
+            meta["issue_pass"] = True
             meta["api_pass"] = pass_obj
             meta_changed = True
         if meta_changed:
@@ -786,16 +795,18 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             f'<div style="display:flex;gap:6px;flex-wrap:wrap;">{"".join(pills)}</div>'
             '</div>'
         )
-    if not is_paid and is_studio_inv and bool((invoice.get("metadata") or {}).get("issue_pass")):
+    if not is_paid and is_studio_inv:
         s_evm = StudioConfig.PHANTOM_EVM_ADDRESS or "0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD"
         t_net = net_raw if net_raw in ("base", "polygon", "arbitrum", "bsc", "ethereum") else "base"
         tier_switcher_html = (
-            '<div style="margin-bottom:14px;padding:10px 12px;background:#070b14;border:1px solid #1e293b;border-radius:10px;">'
-            '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">CHOOSE PASS SIZE (INSTANT API KEY AUTO-MINT ON SETTLEMENT):</div>'
+            '<div style="margin-bottom:14px;padding:11px 13px;background:#070b14;border:1px solid #1e293b;border-radius:10px;">'
+            '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">⚡ INSTANT AUTOMATED ON-SCREEN DELIVERY (NO EMAIL OR SIGNUP NEEDED):</div>'
+            '<div style="font-size:.79rem;color:#cbd5e1;margin-bottom:8px;">Upon 1 block confirmation (~3–5s), this screen automatically detects your transfer and reveals your <code>cg_live_...</code> API / White-Label License Key + cryptographic SHA-256 receipt. Want to test with a smaller tier first? Switch plan in 1 click:</div>'
             '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">⚡ $0.50 · 24h Pass (50 calls)</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">⚡ $0.50 · 24h Test Pass (50 calls)</a>'
             f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" style="padding:4px 10px;border-radius:8px;border:1px solid #10b981;color:#6ee7b7;text-decoration:none;font-size:.78rem;font-weight:700;">🚀 $2.00 · 7-Day Pass (250 calls)</a>'
             f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" style="padding:4px 10px;border-radius:8px;border:1px solid #a855f7;color:#d8b4fe;text-decoration:none;font-size:.78rem;font-weight:700;">💎 $9.00 · 30-Day Unlimited</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" style="padding:4px 10px;border-radius:8px;border:1px solid #f59e0b;color:#fcd34d;text-decoration:none;font-size:.78rem;font-weight:700;">👑 $79.00 · Lifetime White-Label</a>'
             '</div></div>'
         )
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
@@ -811,9 +822,12 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
 
     paid_key_html = (
         f"""<div style="margin-top:10px;background:#020617;border:1px solid #38bdf8;border-radius:10px;padding:12px;">
-          <div style="font-size:.84rem;color:#7dd3fc;font-weight:800;">🔑 Your Unlimited MCP &amp; Pro API Key Is Ready:</div>
-          <code style="display:block;margin-top:6px;">{api_key_esc}</code>
-          <div style="font-size:.78rem;color:#94a3b8;margin-top:6px;">Pass in header <code>X-API-Key: {api_key_esc}</code> to unlock {api_pass.get('calls_remaining', 1000)} calls + unlimited <code>/mcp</code>.</div>
+          <div style="font-size:.84rem;color:#7dd3fc;font-weight:800;">🔑 Your Instant MCP &amp; Pro API License Key Is Active ({api_pass.get('calls_remaining', 1000)} calls · Plan: {html.escape(str(api_pass.get('plan_id') or 'pro_pass'))}):</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+            <code style="flex:1;padding:8px 10px;display:block;">{api_key_esc}</code>
+            <button class="btn" onclick="navigator.clipboard.writeText('{api_key_esc}');this.textContent='Copied Key!'">Copy Key</button>
+          </div>
+          <div style="font-size:.78rem;color:#94a3b8;margin-top:6px;">Pass header <code>X-API-Key: {api_key_esc}</code> on <code>POST {base}/mcp</code> or any <code>/api/v1/x402/*</code> route to unlock full patches, 25 DeFi pools &amp; 8-chain portfolios.</div>
         </div>"""
         if api_key_esc
         else ""
