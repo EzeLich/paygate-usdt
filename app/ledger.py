@@ -1139,16 +1139,52 @@ class StudioLedger:
         paid_amount_usd: float,
         token: str,
         payer: str,
+        network: str | None = None,
     ) -> dict[str, Any] | None:
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
+            if network:
+                conn.execute(
+                    """
+                    UPDATE paygate_invoices
+                    SET status = 'paid', tx_hash = ?, paid_amount_usd = ?, token = ?, payer = ?, paid_at = ?, network = ?
+                    WHERE invoice_id = ?
+                    """,
+                    (
+                        tx_hash.strip(),
+                        float(paid_amount_usd),
+                        token.strip()[:24],
+                        payer.strip()[:120],
+                        now,
+                        network.strip().lower()[:24],
+                        invoice_id.strip(),
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE paygate_invoices
+                    SET status = 'paid', tx_hash = ?, paid_amount_usd = ?, token = ?, payer = ?, paid_at = ?
+                    WHERE invoice_id = ?
+                    """,
+                    (tx_hash.strip(), float(paid_amount_usd), token.strip()[:24], payer.strip()[:120], now, invoice_id.strip()),
+                )
+            row = conn.execute("SELECT * FROM paygate_invoices WHERE invoice_id = ?", (invoice_id.strip(),)).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
+        return out
+
+    def update_paygate_invoice_network(self, invoice_id: str, network: str) -> dict[str, Any] | None:
+        cur = self.get_paygate_invoice(invoice_id)
+        if not cur or cur.get("status") == "paid":
+            return cur
+        clean_net = network.strip().lower()[:24]
+        with self._connect() as conn:
             conn.execute(
-                """
-                UPDATE paygate_invoices
-                SET status = 'paid', tx_hash = ?, paid_amount_usd = ?, token = ?, payer = ?, paid_at = ?
-                WHERE invoice_id = ?
-                """,
-                (tx_hash.strip(), float(paid_amount_usd), token.strip()[:24], payer.strip()[:120], now, invoice_id.strip()),
+                "UPDATE paygate_invoices SET network = ? WHERE invoice_id = ? AND status != 'paid'",
+                (clean_net, invoice_id.strip()),
             )
             row = conn.execute("SELECT * FROM paygate_invoices WHERE invoice_id = ?", (invoice_id.strip(),)).fetchone()
         if not row:

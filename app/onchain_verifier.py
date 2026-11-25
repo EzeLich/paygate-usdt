@@ -340,3 +340,82 @@ class OnChainPaymentVerifier:
                 reason=f"Solana RPC error: {exc}",
                 raw_proof={},
             )
+
+    def find_recent_evm_transfers(
+        self,
+        network: str,
+        expected_recipient: str,
+        min_amount_usd: float,
+        lookback_blocks: int = 400,
+    ) -> list[VerificationResult]:
+        """Scan recent ERC-20 USDT/USDC Transfer logs to expected_recipient so buyers don't need to copy-paste tx_hash."""
+        net = network.strip().lower()
+        if net not in StudioConfig.EVM_RPCS:
+            return []
+        rpc_url = StudioConfig.EVM_RPCS[net]
+        contracts = StudioConfig.EVM_STABLECOINS.get(net, {})
+        if not contracts:
+            return []
+        contract_lookup = {addr.lower(): (sym, dec) for sym, (addr, dec) in contracts.items()}
+        target_topic = "0x" + expected_recipient.strip().lower().removeprefix("0x").rjust(64, "0")
+        try:
+            blk_resp = _rpc_post(rpc_url, {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []})
+            head_block = int(str(blk_resp.get("result") or "0x0"), 16)
+            if head_block <= 0:
+                return []
+            from_block = hex(max(0, head_block - max(10, int(lookback_blocks))))
+            logs_resp = _rpc_post(
+                rpc_url,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "eth_getLogs",
+                    "params": [
+                        {
+                            "fromBlock": from_block,
+                            "toBlock": "latest",
+                            "address": [addr for addr, _ in contracts.values()],
+                            "topics": [ERC20_TRANSFER_TOPIC, None, target_topic],
+                        }
+                    ],
+                },
+            )
+            logs = logs_resp.get("result") or []
+            if not isinstance(logs, list):
+                return []
+            matches: list[VerificationResult] = []
+            for log in reversed(logs):
+                log_addr = str(log.get("address") or "").lower()
+                tx_hash = str(log.get("transactionHash") or "").strip()
+                topics = [str(t).lower() for t in (log.get("topics") or [])]
+                if not tx_hash or log_addr not in contract_lookup or len(topics) < 3:
+                    continue
+                sym, decimals = contract_lookup[log_addr]
+                raw_int = int(str(log.get("data") or "0x0"), 16)
+                amount_usd = raw_int / (10**decimals)
+                if amount_usd + 1e-6 < float(min_amount_usd):
+                    continue
+                sender = "0x" + topics[1].removeprefix("0x")[-40:]
+                matches.append(
+                    VerificationResult(
+                        verified=True,
+                        network=net,
+                        token=sym,
+                        amount_usd=round(amount_usd, 6),
+                        recipient=expected_recipient,
+                        sender=sender,
+                        tx_hash=tx_hash,
+                        reason=f"Auto-detected on-chain {amount_usd:.2f} {sym} transfer on {net}.",
+                        raw_proof={
+                            "blockNumber": log.get("blockNumber"),
+                            "contract": log_addr,
+                            "token": sym,
+                            "amount_usd": amount_usd,
+                            "auto_detected": True,
+                        },
+                    )
+                )
+            return matches
+        except Exception:
+            return []
+

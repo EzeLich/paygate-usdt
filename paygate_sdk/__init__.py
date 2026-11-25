@@ -266,6 +266,13 @@ class PayGateClient:
             payload={"tx_hash": tx_hash},
         )
 
+    def auto_detect_invoice(self, invoice_id: str) -> dict[str, Any]:
+        return self._request(
+            f"/api/v1/paygate/invoices/{invoice_id}/auto-detect",
+            method="POST",
+            payload={},
+        )
+
     def get_receipt(self, invoice_id: str) -> dict[str, Any]:
         return self._request(f"/api/v1/paygate/invoices/{invoice_id}/receipt", method="GET")
 
@@ -326,10 +333,150 @@ class PayGateClient:
 
 from .cli import handle_mcp_jsonrpc
 
+
+def mcp_tool_paywall(
+    *,
+    price_usd: float,
+    merchant_wallet: str,
+    network: str = "base",
+    title: str = "Premium MCP Tool Access",
+    free_calls: int = 3,
+    billing_days: int = 30,
+    base_url: str = "https://chainguard-studio-production.up.railway.app",
+    client: PayGateClient | None = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """
+    1-line non-custodial USDT/USDC paywall & recurring subscription decorator for any Python MCP tool
+    (compatible with FastMCP `@mcp.tool()`, Anthropic `mcp` SDK, and plain Python tool functions).
+
+    - Allows `free_calls` invocations per `customer_ref` (default `"anonymous"`), attaching a `paygate_billing`
+      telemetry block with remaining free calls and a 1-click multi-chain checkout URL.
+    - Once `free_calls` are used, automatically verifies if the caller passed a paid `paygate_invoice_id`
+      or has an active recurring subscription (`customer_ref`) with `merchant_wallet`.
+    - When unpaid, returns a structured MCP payment prompt with `checkout_url` and x402 challenge.
+    """
+    pg = client or PayGateClient(base_url=base_url)
+    usage_counts: dict[str, int] = {}
+
+    def _check_access(kwargs: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+        cust_ref = str(kwargs.get("customer_ref") or "anonymous").strip() or "anonymous"
+        inv_id = str(kwargs.get("paygate_invoice_id") or "").strip()
+
+        checkout_url = pg.build_payment_url(
+            merchant_wallet=merchant_wallet,
+            amount_usd=price_usd,
+            network=network,
+            title=title,
+            customer_ref=cust_ref if cust_ref != "anonymous" else "",
+            billing_days=billing_days,
+        )
+
+        # 1. Explicit paid invoice ID unlocks immediately
+        if inv_id:
+            inv_res = pg.get_invoice(inv_id)
+            inv_obj = inv_res.get("invoice") if isinstance(inv_res, dict) else None
+            if (
+                isinstance(inv_obj, dict)
+                and inv_obj.get("status") == "paid"
+                and str(inv_obj.get("merchant_wallet") or "").lower() == merchant_wallet.strip().lower()
+                and float(inv_obj.get("paid_amount_usd") or 0.0) + 1e-6 >= float(price_usd)
+            ):
+                return True, {
+                    "tier": "paid_invoice",
+                    "invoice_id": inv_id,
+                    "tx_hash": inv_obj.get("tx_hash"),
+                    "network": inv_obj.get("network"),
+                    "checkout_url": checkout_url,
+                }
+
+        # 2. Active recurring subscription for customer_ref unlocks immediately
+        if cust_ref != "anonymous" and billing_days > 0:
+            sub = pg.check_subscription(
+                merchant_wallet=merchant_wallet,
+                customer_ref=cust_ref,
+                amount_usd=price_usd,
+                network=network,
+                title=title,
+                billing_days=billing_days,
+            )
+            if isinstance(sub, dict) and sub.get("active"):
+                return True, {
+                    "tier": "active_subscription",
+                    "customer_ref": cust_ref,
+                    "days_remaining": sub.get("days_remaining"),
+                    "expires_at": sub.get("expires_at"),
+                    "renewal_url": sub.get("renewal_url") or checkout_url,
+                }
+
+        # 3. Free tier quota check
+        used = usage_counts.get(cust_ref, 0)
+        if used < max(0, int(free_calls)):
+            usage_counts[cust_ref] = used + 1
+            remaining = max(0, int(free_calls) - (used + 1))
+            return True, {
+                "tier": "free_tier",
+                "free_calls_remaining": remaining,
+                "price_usd": float(price_usd),
+                "checkout_url": checkout_url,
+            }
+
+        # 4. Quota exhausted -> return non-custodial payment challenge
+        ch = build_x402_challenge(
+            resource_url=f"{pg.base_url}/paygate",
+            description=title,
+            price_usd=float(price_usd),
+            evm_recipient=merchant_wallet if merchant_wallet.startswith("0x") else "",
+            solana_recipient="" if merchant_wallet.startswith("0x") else merchant_wallet,
+        )
+        return False, {
+            "ok": False,
+            "error": f"Free MCP tool quota reached ({free_calls} calls). Complete non-custodial USDT/USDC payment to unlock.",
+            "price_usd": float(price_usd),
+            "merchant_wallet": merchant_wallet,
+            "network": network,
+            "billing_days": int(billing_days),
+            "checkout_url": checkout_url,
+            "instructions": (
+                f"Open {checkout_url} to pay ${price_usd:.2f} USDT/USDC on Base, Polygon, Arbitrum, BSC, or Solana, "
+                "then pass `paygate_invoice_id` or `customer_ref` to unlock."
+            ),
+            "x402": ch,
+        }
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                allowed, billing_info = _check_access(kwargs)
+                if not allowed:
+                    return billing_info
+                res = await func(*args, **kwargs)
+                if isinstance(res, dict):
+                    return {**res, "paygate_billing": billing_info}
+                return res
+
+            return async_wrapper
+
+        @wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            allowed, billing_info = _check_access(kwargs)
+            if not allowed:
+                return billing_info
+            res = func(*args, **kwargs)
+            if isinstance(res, dict):
+                return {**res, "paygate_billing": billing_info}
+            return res
+
+        return sync_wrapper
+
+    return decorator
+
+
 __all__ = [
     "PayGateClient",
     "build_x402_challenge",
     "handle_mcp_jsonrpc",
+    "mcp_tool_paywall",
     "require_usdt_payment",
     "verify_webhook_signature",
 ]

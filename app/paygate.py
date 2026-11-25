@@ -511,6 +511,7 @@ def verify_and_settle_invoice(
     tx_hash: str,
     ledger: StudioLedger,
     verifier: OnChainPaymentVerifier,
+    network_override: str = "",
 ) -> dict[str, Any]:
     inv = ledger.get_paygate_invoice(invoice_id)
     if not inv:
@@ -520,12 +521,27 @@ def verify_and_settle_invoice(
     tx = (tx_hash or "").strip()
     if ledger.is_tx_used(tx):
         return {"ok": False, "status_code": 402, "error": "Transaction hash already redeemed."}
+    primary_net = (network_override or inv["network"]).strip().lower()
     res = verifier.verify(
-        network=inv["network"],
+        network=primary_net,
         tx_hash=tx,
         min_amount_usd=float(inv["amount_usd"]),
         expected_recipient=inv["merchant_wallet"],
     )
+    # Multi-chain EVM fallback: if buyer sent USDT/USDC to the same 0x merchant_wallet on another supported EVM chain, accept it seamlessly
+    if not res.verified and inv["merchant_wallet"].strip().startswith("0x") and tx.startswith("0x"):
+        for candidate_net in ("base", "polygon", "arbitrum", "bsc", "ethereum"):
+            if candidate_net == primary_net:
+                continue
+            alt_res = verifier.verify(
+                network=candidate_net,
+                tx_hash=tx,
+                min_amount_usd=float(inv["amount_usd"]),
+                expected_recipient=inv["merchant_wallet"],
+            )
+            if alt_res.verified:
+                res = alt_res
+                break
     if not res.verified:
         return {"ok": False, "status_code": 402, "error": res.reason or "Transaction verification failed."}
     ledger.record_payment(
@@ -545,6 +561,7 @@ def verify_and_settle_invoice(
         paid_amount_usd=float(res.amount_usd),
         token=res.token,
         payer=res.sender,
+        network=res.network,
     )
     if updated:
         meta = dict(updated.get("metadata") or {})
@@ -552,7 +569,6 @@ def verify_and_settle_invoice(
             updated["merchant_wallet"].strip().lower() == StudioConfig.PHANTOM_EVM_ADDRESS.strip().lower()
             or updated["merchant_wallet"].strip() == StudioConfig.PHANTOM_SOL_ADDRESS.strip()
         )
-        meta = dict(updated.get("metadata") or {})
         billing_days = int(meta.get("billing_days") or 0)
         customer_ref = str(meta.get("customer_ref") or "").strip()
         meta_changed = False
@@ -584,12 +600,15 @@ def verify_and_settle_invoice(
             if customer_ref:
                 meta["customer_ref"] = customer_ref
             meta_changed = True
-        if is_studio_merchant and float(updated["paid_amount_usd"]) >= 5.0 and bool(meta.get("issue_pass")):
+        paid_val = float(updated["paid_amount_usd"])
+        if is_studio_merchant and paid_val >= 1.0 and bool(meta.get("issue_pass")):
+            pass_calls = 250 if paid_val < 5.0 else (1000 if paid_val < 29.0 else 5000)
+            pass_days = billing_days if billing_days > 0 else (7 if paid_val < 5.0 else 30)
             pass_obj = ledger.issue_api_pass(
                 plan_id="paygate_instant_pass",
                 tx_hash=tx,
-                calls=1000 if float(updated["paid_amount_usd"]) < 29.0 else 5000,
-                days=billing_days if billing_days > 0 else 30,
+                calls=pass_calls,
+                days=pass_days,
                 owner_wallet=res.sender,
             )
             meta["api_pass"] = pass_obj
@@ -604,6 +623,53 @@ def verify_and_settle_invoice(
     )
     final_inv = updated or inv
     return {"ok": True, "invoice": final_inv, "receipt": build_invoice_receipt(final_inv)}
+
+
+def auto_detect_and_settle_invoice(
+    *,
+    invoice_id: str,
+    ledger: StudioLedger,
+    verifier: OnChainPaymentVerifier,
+) -> dict[str, Any]:
+    """Scan recent Transfer logs across the invoice network (and fallback EVM chains) to settle without manual tx_hash entry."""
+    inv = ledger.get_paygate_invoice(invoice_id)
+    if not inv:
+        return {"ok": False, "status_code": 404, "error": "Invoice not found."}
+    if inv["status"] == "paid":
+        return {"ok": True, "invoice": inv, "already_paid": True}
+    wal = str(inv["merchant_wallet"] or "").strip()
+    if not wal.startswith("0x") or not hasattr(verifier, "find_recent_evm_transfers"):
+        return {
+            "ok": False,
+            "status_code": 402,
+            "error": "Paste your transaction signature in the box above to verify.",
+        }
+    primary = str(inv["network"] or "polygon").strip().lower()
+    chains = [primary] + [c for c in ("base", "polygon", "arbitrum", "bsc", "ethereum") if c != primary]
+    for net in chains:
+        matches = verifier.find_recent_evm_transfers(
+            network=net,
+            expected_recipient=wal,
+            min_amount_usd=float(inv["amount_usd"]),
+            lookback_blocks=400,
+        )
+        for m in matches:
+            if not m.tx_hash or ledger.is_tx_used(m.tx_hash):
+                continue
+            settled = verify_and_settle_invoice(
+                invoice_id=invoice_id,
+                tx_hash=m.tx_hash,
+                ledger=ledger,
+                verifier=verifier,
+                network_override=net,
+            )
+            if settled.get("ok"):
+                return settled
+    return {
+        "ok": False,
+        "status_code": 402,
+        "error": f"No unredeemed transfer >= ${float(inv['amount_usd']):.2f} USDT/USDC to {wal[:10]}... detected in recent blocks yet. Wait ~5s after confirmation or paste TX hash.",
+    }
 
 
 _EXPLORER_TX_URLS: dict[str, str] = {
@@ -686,6 +752,20 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     usdt_addr, usdt_dec = evm_tokens.get("USDT") or ("", 6)
     usdc_addr, usdc_dec = evm_tokens.get("USDC") or ("", 6)
     one_click_btns = ""
+    chain_switcher_html = ""
+    if not is_paid and invoice["merchant_wallet"].strip().startswith("0x"):
+        pills = []
+        for c_net, c_lbl in [("base", "Base"), ("polygon", "Polygon"), ("arbitrum", "Arbitrum"), ("bsc", "BSC (BEP-20)"), ("ethereum", "Ethereum")]:
+            active_style = "background:#10b981;color:#02160f;border-color:#10b981;font-weight:800;" if c_net == net_raw else "background:#070b14;color:#cbd5e1;border-color:#334155;"
+            pills.append(
+                f'<a href="?network={c_net}" style="display:inline-block;padding:5px 11px;border-radius:999px;border:1px solid;font-size:.78rem;text-decoration:none;{active_style}">{c_lbl}</a>'
+            )
+        chain_switcher_html = (
+            '<div style="margin-bottom:14px;">'
+            '<div style="font-size:.78rem;color:#94a3b8;font-weight:700;margin-bottom:6px;">SWITCH PAYMENT NETWORK (PAY FROM ANY CHAIN YOU HOLD USDT/USDC ON):</div>'
+            f'<div style="display:flex;gap:6px;flex-wrap:wrap;">{"".join(pills)}</div>'
+            '</div>'
+        )
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
         btns = []
         if usdt_addr:
@@ -717,6 +797,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
         </div>"""
         if is_paid
         else f"""<div class="card" style="margin-top:16px;">
+          {chain_switcher_html}
           {one_click_btns}
           <label>1. Or send exact amount (USDT or USDC on <strong>{net}</strong>) directly to merchant wallet:</label>
           <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
@@ -724,12 +805,19 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
           </div>
           <div style="margin-top:8px;font-size:.78rem;color:#94a3b8;">Mobile / Wallet URI: <code>{pay_uri}</code></div>
-          <label style="margin-top:14px;">2. Transaction hash (auto-filled on 1-click wallet pay, or paste manually):</label>
+          <label style="margin-top:14px;">2. Verify payment (auto-detects your transfer on-chain or paste TX hash):</label>
           <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-            <input id="invTx" style="flex:1;min-width:220px;" placeholder="0x... or Solana signature"/>
-            <button class="btn" onclick="verifyInv()">Verify On-Chain Payment</button>
+            <button class="btn" onclick="autoDetectInv()">🔍 I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <input id="invTx" style="flex:1;min-width:220px;" placeholder="Or paste 0x... / Solana tx signature"/>
+            <button class="btn2" onclick="verifyInv()">Verify by TX Hash</button>
           </div>
           <div id="invMsg" style="margin-top:10px;font-size:.9rem;"></div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e293b;font-size:.8rem;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <span>Short on {net} USDT/USDC?</span>
+            <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">🔄 Swap Any Token or Dust into USDT/USDC in 1 Click →</a>
+          </div>
         </div>"""
     )
     cents_int = int(round(amt_f * 100))
@@ -822,6 +910,23 @@ async function verifyInv(silent) {{
   if (!r.ok) {{
     m.style.color = silent ? '#fcd34d' : '#fca5a5';
     m.textContent = (d.detail || 'Awaiting confirmation...') + (silent ? ' (retrying in 3s...)' : '');
+    return false;
+  }}
+  location.reload();
+  return true;
+}}
+
+async function autoDetectInv() {{
+  const m = document.getElementById('invMsg');
+  m.style.color = '#38bdf8';
+  m.textContent = 'Scanning recent blocks across Base, Polygon, Arbitrum, BSC & Ethereum for your transfer...';
+  const r = await fetch('/api/v1/paygate/invoices/{inv_id}/auto-detect', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: '{{}}'
+  }});
+  const d = await r.json();
+  if (!r.ok) {{
+    m.style.color = '#fcd34d';
+    m.textContent = d.detail || 'Transfer not seen yet. Wait a few seconds or paste your TX hash.';
     return false;
   }}
   location.reload();

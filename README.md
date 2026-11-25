@@ -1,4 +1,4 @@
-# PayGate USDT v2.4 — Non-Custodial Stablecoin Payment Gateway, Subscriptions & 8-Tool MCP Server
+# PayGate USDT v2.5 — Non-Custodial Stablecoin Payment Gateway, `@mcp_tool_paywall`, Subscriptions & 8-Tool MCP Server
 
 [![CI](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml)
 [![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzeLich%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzeLich)
@@ -10,9 +10,9 @@
 [![MCP Native](https://img.shields.io/badge/MCP-Streamable%20HTTP%202025--06--18-38bdf8.svg)](https://chainguard-studio-production.up.railway.app/paygate/mcp)
 [![Custody: Zero](https://img.shields.io/badge/Custody-0%25%20Non--Custodial-10b981.svg)](https://chainguard-studio-production.up.railway.app/paygate)
 
-**Accept USDT & USDC across 6 blockchains straight to your own self-custody wallet — with Hosted Checkout Invoices, HMAC-SHA256 Signed Webhooks, FastAPI `HTTP 402` (`x402 v2`) API Paywalls, Automated Telegram VIP Groups, and an 8-Tool AI-Agent MCP Server (`2025-06-18` with full `annotations` & `outputSchema`).**
+**Monetize any Python MCP Server (`@mcp_tool_paywall`), FastAPI Route (`@require_usdt_payment`), SaaS Subscription, or Telegram VIP Group in USDT & USDC across 6 blockchains straight to your own self-custody wallet.**
 
-No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut.
+No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut. Includes **1-Click Multi-Chain Switcher** (`Base`, `Polygon`, `Arbitrum`, `BSC`, `Ethereum`, `Solana`) and **Zero-Tx-Hash On-Chain Payment Auto-Detection**.
 
 - 🌐 **Live Cloud Sandbox & Demo:** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
 - 🤖 **Live Telegram VIP Bot Demo:** [@ChainGuardVaultBot (`?start=vip`)](https://t.me/ChainGuardVaultBot?start=vip)
@@ -65,6 +65,25 @@ No custodial processor holds your funds. No Stripe / Whop / bank account require
 ---
 
 ## 30-Second Quickstarts
+
+### 0. Monetize Any Python MCP Tool in 1 Line (`@mcp_tool_paywall`)
+
+Wrap any `FastMCP` / `mcp` SDK tool or Python function with `@mcp_tool_paywall`. Callers get `free_calls` free invocations (with live `paygate_billing` telemetry), and automatically unlock unlimited access when they pay your non-custodial USDT/USDC invoice or recurring subscription:
+
+```python
+from paygate_sdk import mcp_tool_paywall
+
+@mcp_tool_paywall(
+    price_usd=9.0,
+    merchant_wallet="0xYourEvmOrSolanaWalletAddress",
+    network="base",       # base | polygon | arbitrum | bsc | ethereum | solana
+    free_calls=3,         # free trial invocations per customer_ref
+    billing_days=30,      # recurring 30-day subscription entitlement
+    title="Pro AI Agent MCP Pass",
+)
+def analyze_market_alpha(symbol: str, customer_ref: str = "", paygate_invoice_id: str = "") -> dict:
+    return {"symbol": symbol, "verdict": "STRONG_BUY"}
+```
 
 ### 1. Protect any FastAPI Endpoint with HTTP 402 (`x402 v2` Direct USDT/USDC)
 
@@ -218,6 +237,7 @@ Want this running for your business without touching servers, RPC failovers, or 
 | Option | Price | Instant 1-Click Checkout / Action |
 |---|---|---|
 | **Open-Source Self-Hosted (`MIT`)** | **$0** | Clone this repo, run with FastAPI/uvicorn + `.env`, 0% fees |
+| **7-Day Starter MCP & Pro API Pass (250 Calls)** | **$2 USDC/USDT** | [⚡ Pay $2 Base/Polygon USDC/USDT — Auto-Mints `cg_live_` Key](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=2&network=base&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7) |
 | **30-Day Unlimited MCP & Pro API Pass** | **$9 USDC/USDT** | [⚡ Pay $9 Base USDC/USDT — Auto-Mints `cg_live_` Key](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=9&network=base&title=30-Day+Unlimited+MCP+%26+Pro+API+Pass&issue_pass=1) |
 | **Managed Cloud VIP Bot** | **$29 USDT/mo** (7-day free trial) | [Launch Bot Free in 60s](https://chainguard-studio-production.up.railway.app/paygate#setup) |
 | **Lifetime White-Label Bot License** | **$79 USDT** one-time | [⚡ Pay $79 Polygon USDT/USDC](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=79&network=polygon&title=PayGate+Lifetime+White-Label+License) |
