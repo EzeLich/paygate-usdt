@@ -601,9 +601,20 @@ def verify_and_settle_invoice(
                 meta["customer_ref"] = customer_ref
             meta_changed = True
         paid_val = float(updated["paid_amount_usd"])
-        if is_studio_merchant and paid_val >= 1.0 and bool(meta.get("issue_pass")):
-            pass_calls = 250 if paid_val < 5.0 else (1000 if paid_val < 29.0 else 5000)
-            pass_days = billing_days if billing_days > 0 else (7 if paid_val < 5.0 else 30)
+        if is_studio_merchant and paid_val >= 0.45 and bool(meta.get("issue_pass")):
+            if paid_val < 1.99:
+                pass_calls = 50
+                default_days = 1
+            elif paid_val < 5.0:
+                pass_calls = 250
+                default_days = 7
+            elif paid_val < 29.0:
+                pass_calls = 1000
+                default_days = 30
+            else:
+                pass_calls = 5000
+                default_days = 90
+            pass_days = billing_days if billing_days > 0 else default_days
             pass_obj = ledger.issue_api_pass(
                 plan_id="paygate_instant_pass",
                 tx_hash=tx,
@@ -753,9 +764,18 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     usdc_addr, usdc_dec = evm_tokens.get("USDC") or ("", 6)
     one_click_btns = ""
     chain_switcher_html = ""
-    if not is_paid and invoice["merchant_wallet"].strip().startswith("0x"):
+    tier_switcher_html = ""
+    raw_wal = invoice["merchant_wallet"].strip()
+    is_studio_inv = (
+        raw_wal.lower() == (StudioConfig.PHANTOM_EVM_ADDRESS or "").strip().lower()
+        or raw_wal == (StudioConfig.PHANTOM_SOL_ADDRESS or "").strip()
+    )
+    if not is_paid and (raw_wal.startswith("0x") or is_studio_inv):
         pills = []
-        for c_net, c_lbl in [("base", "Base"), ("polygon", "Polygon"), ("arbitrum", "Arbitrum"), ("bsc", "BSC (BEP-20)"), ("ethereum", "Ethereum")]:
+        net_choices = [("base", "Base"), ("polygon", "Polygon"), ("arbitrum", "Arbitrum"), ("bsc", "BSC (BEP-20)"), ("ethereum", "Ethereum")]
+        if is_studio_inv:
+            net_choices.append(("solana", "Solana (SPL)"))
+        for c_net, c_lbl in net_choices:
             active_style = "background:#10b981;color:#02160f;border-color:#10b981;font-weight:800;" if c_net == net_raw else "background:#070b14;color:#cbd5e1;border-color:#334155;"
             pills.append(
                 f'<a href="?network={c_net}" style="display:inline-block;padding:5px 11px;border-radius:999px;border:1px solid;font-size:.78rem;text-decoration:none;{active_style}">{c_lbl}</a>'
@@ -766,6 +786,18 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             f'<div style="display:flex;gap:6px;flex-wrap:wrap;">{"".join(pills)}</div>'
             '</div>'
         )
+    if not is_paid and is_studio_inv and bool((invoice.get("metadata") or {}).get("issue_pass")):
+        s_evm = StudioConfig.PHANTOM_EVM_ADDRESS or "0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD"
+        t_net = net_raw if net_raw in ("base", "polygon", "arbitrum", "bsc", "ethereum") else "base"
+        tier_switcher_html = (
+            '<div style="margin-bottom:14px;padding:10px 12px;background:#070b14;border:1px solid #1e293b;border-radius:10px;">'
+            '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">CHOOSE PASS SIZE (INSTANT API KEY AUTO-MINT ON SETTLEMENT):</div>'
+            '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">⚡ $0.50 · 24h Pass (50 calls)</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" style="padding:4px 10px;border-radius:8px;border:1px solid #10b981;color:#6ee7b7;text-decoration:none;font-size:.78rem;font-weight:700;">🚀 $2.00 · 7-Day Pass (250 calls)</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" style="padding:4px 10px;border-radius:8px;border:1px solid #a855f7;color:#d8b4fe;text-decoration:none;font-size:.78rem;font-weight:700;">💎 $9.00 · 30-Day Unlimited</a>'
+            '</div></div>'
+        )
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
         btns = []
         if usdt_addr:
@@ -774,6 +806,8 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">⚡ 1-Click Pay ${amt} USDC</button>""")
         if btns:
             one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
+
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=136x136&margin=6&data={urllib.parse.quote(wallet)}"
 
     paid_key_html = (
         f"""<div style="margin-top:10px;background:#020617;border:1px solid #38bdf8;border-radius:10px;padding:12px;">
@@ -797,23 +831,33 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
         </div>"""
         if is_paid
         else f"""<div class="card" style="margin-top:16px;">
+          {tier_switcher_html}
           {chain_switcher_html}
           {one_click_btns}
-          <label>1. Or send exact amount (USDT or USDC on <strong>{net}</strong>) directly to merchant wallet:</label>
-          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
-            <code id="mWal" style="flex:1;padding:10px;display:block;">{wallet}</code>
-            <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
+          <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+            <div style="flex:1;min-width:240px;">
+              <label>1. Send exact amount (<strong>${amt}</strong> USDT or USDC on <strong>{net}</strong>) to merchant wallet:</label>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+                <code id="mWal" style="flex:1;padding:10px;display:block;">{wallet}</code>
+                <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
+                <button class="btn2" onclick="navigator.clipboard.writeText('{amt}');this.textContent='Copied ${amt}!'">Copy ${amt}</button>
+              </div>
+              <div style="margin-top:8px;font-size:.78rem;color:#94a3b8;">Mobile / Wallet URI: <code>{pay_uri}</code></div>
+            </div>
+            <div style="text-align:center;background:#fff;padding:6px;border-radius:10px;">
+              <img src="{qr_url}" width="124" height="124" alt="Wallet QR" style="display:block;border-radius:6px;" onerror="this.parentElement.style.display='none'"/>
+              <div style="font-size:.68rem;color:#0f172a;font-weight:800;margin-top:2px;">SCAN IN MOBILE WALLET</div>
+            </div>
           </div>
-          <div style="margin-top:8px;font-size:.78rem;color:#94a3b8;">Mobile / Wallet URI: <code>{pay_uri}</code></div>
-          <label style="margin-top:14px;">2. Verify payment (auto-detects your transfer on-chain or paste TX hash):</label>
+          <label style="margin-top:14px;">2. Verify payment (auto-detects your transfer on-chain every 12s or click below):</label>
           <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-            <button class="btn" onclick="autoDetectInv()">🔍 I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
+            <button class="btn" onclick="autoDetectInv(false)">🔍 I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
             <input id="invTx" style="flex:1;min-width:220px;" placeholder="Or paste 0x... / Solana tx signature"/>
             <button class="btn2" onclick="verifyInv()">Verify by TX Hash</button>
           </div>
-          <div id="invMsg" style="margin-top:10px;font-size:.9rem;"></div>
+          <div id="invMsg" style="margin-top:10px;font-size:.9rem;color:#38bdf8;">⏳ Listening for on-chain transfer to {wallet[:10]}... on {net}...</div>
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e293b;font-size:.8rem;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <span>Short on {net} USDT/USDC?</span>
             <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">🔄 Swap Any Token or Dust into USDT/USDC in 1 Click →</a>
@@ -916,21 +960,35 @@ async function verifyInv(silent) {{
   return true;
 }}
 
-async function autoDetectInv() {{
+async function autoDetectInv(silentBg) {{
   const m = document.getElementById('invMsg');
-  m.style.color = '#38bdf8';
-  m.textContent = 'Scanning recent blocks across Base, Polygon, Arbitrum, BSC & Ethereum for your transfer...';
-  const r = await fetch('/api/v1/paygate/invoices/{inv_id}/auto-detect', {{
-    method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: '{{}}'
-  }});
-  const d = await r.json();
-  if (!r.ok) {{
-    m.style.color = '#fcd34d';
-    m.textContent = d.detail || 'Transfer not seen yet. Wait a few seconds or paste your TX hash.';
+  if (!m) return false;
+  if (!silentBg) {{
+    m.style.color = '#38bdf8';
+    m.textContent = 'Scanning recent blocks across Base, Polygon, Arbitrum, BSC & Ethereum for your transfer...';
+  }}
+  try {{
+    const r = await fetch('/api/v1/paygate/invoices/{inv_id}/auto-detect', {{
+      method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: '{{}}'
+    }});
+    const d = await r.json();
+    if (!r.ok) {{
+      if (!silentBg) {{
+        m.style.color = '#fcd34d';
+        m.textContent = d.detail || 'Transfer not seen yet. Wait a few seconds or paste your TX hash.';
+      }}
+      return false;
+    }}
+    location.reload();
+    return true;
+  }} catch (e) {{
     return false;
   }}
-  location.reload();
-  return true;
+}}
+if ({'false' if is_paid else 'true'} && MERCHANT_WALLET.startsWith('0x')) {{
+  setInterval(function() {{
+    if (!document.hidden) autoDetectInv(true);
+  }}, 12000);
 }}
 </script></body></html>"""
 

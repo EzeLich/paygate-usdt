@@ -1176,16 +1176,27 @@ class StudioLedger:
         out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
         return out
 
-    def update_paygate_invoice_network(self, invoice_id: str, network: str) -> dict[str, Any] | None:
+    def update_paygate_invoice_network(
+        self,
+        invoice_id: str,
+        network: str,
+        merchant_wallet: str | None = None,
+    ) -> dict[str, Any] | None:
         cur = self.get_paygate_invoice(invoice_id)
         if not cur or cur.get("status") == "paid":
             return cur
         clean_net = network.strip().lower()[:24]
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE paygate_invoices SET network = ? WHERE invoice_id = ? AND status != 'paid'",
-                (clean_net, invoice_id.strip()),
-            )
+            if merchant_wallet and merchant_wallet.strip():
+                conn.execute(
+                    "UPDATE paygate_invoices SET network = ?, merchant_wallet = ? WHERE invoice_id = ? AND status != 'paid'",
+                    (clean_net, merchant_wallet.strip()[:120], invoice_id.strip()),
+                )
+            else:
+                conn.execute(
+                    "UPDATE paygate_invoices SET network = ? WHERE invoice_id = ? AND status != 'paid'",
+                    (clean_net, invoice_id.strip()),
+                )
             row = conn.execute("SELECT * FROM paygate_invoices WHERE invoice_id = ?", (invoice_id.strip(),)).fetchone()
         if not row:
             return None
