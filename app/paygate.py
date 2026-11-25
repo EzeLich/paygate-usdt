@@ -812,9 +812,9 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
         btns = []
         if usdt_addr:
-            btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">Pay ${amt} USDT (Browser Wallet)</button>""")
+            btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">1-Click Pay ${amt} USDT (Browser Wallet)</button>""")
         if usdc_addr:
-            btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">Pay ${amt} USDC (Browser Wallet)</button>""")
+            btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">1-Click Pay ${amt} USDC (Browser Wallet)</button>""")
         if btns:
             one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
 
