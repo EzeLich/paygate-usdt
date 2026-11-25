@@ -3,10 +3,10 @@
   "name": "io.github.EzeLich/paygate-usdt",
   "title": "PayGate USDT Payment Gateway MCP",
   "description": "8-tool non-custodial 6-chain USDT/USDC payment gateway: @mcp_tool_paywall, invoice CRUD & x402.",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "websiteUrl": "https://chainguard-studio-production.up.railway.app/paygate",
   "repository": {
-    "url": "https://github.com/EzeLich/paygate-usdt",
+    "url": "https://github.com/EzequielLech/paygate-usdt",
     "source": "github"
   },
   "remotes": [

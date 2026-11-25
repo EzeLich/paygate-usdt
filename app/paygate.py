@@ -12,6 +12,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -1128,27 +1129,29 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <span class="badge">{t['badge']}</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="https://github.com/EzeLich/paygate-usdt" target="_blank">⭐ GitHub Open-Source SDK &amp; API</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#invoice-link">{'🔗 Instant Invoice' if not is_es else '🔗 Link de Cobro'}</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#demo">{'⚡ Live Demo' if not is_es else '⚡ Demo en Vivo'}</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#b2b">{'🏢 Done-For-You B2B' if not is_es else '🏢 Setup Llave en Mano'}</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/paygate?lang={alt_lang}">🌐 {alt_lbl}</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;border-color:#10b981;color:#6ee7b7;" href="{base}/paygate/merchant">Merchant Dashboard</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="https://github.com/EzequielLech/paygate-usdt" target="_blank">GitHub Open-Source SDK &amp; API</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#invoice-link">{'Instant Invoice' if not is_es else 'Link de Cobro'}</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#demo">{'Live Demo' if not is_es else 'Demo en Vivo'}</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#b2b">{'Done-For-You B2B' if not is_es else 'Setup Llave en Mano'}</a>
+      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/paygate?lang={alt_lang}">{alt_lbl}</a>
     </div>
   </div>
   <div style="margin-top:14px;background:#0b1325;border:1px solid #1e3a5f;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
     <div style="font-size:.88rem;color:#cbd5e1;">
-      <strong>Open-Source Python SDK + x402 + Signed Webhooks + MCP Server:</strong>
+      <strong>Open-Source Python + TypeScript/Node.js SDK + x402 + Signed Webhooks + MCP Server:</strong>
       Deploy <code>paygate-usdt</code> self-hosted (MIT) or use our managed cloud &amp; B2B integration.
     </div>
-    <a class="btn2" style="padding:7px 13px;font-size:.82rem;border-color:#38bdf8;color:#7dd3fc;" href="https://github.com/EzeLich/paygate-usdt" target="_blank">github.com/EzeLich/paygate-usdt →</a>
+    <a class="btn2" style="padding:7px 13px;font-size:.82rem;border-color:#38bdf8;color:#7dd3fc;" href="https://github.com/EzequielLech/paygate-usdt" target="_blank">github.com/EzequielLech/paygate-usdt -></a>
   </div>
   <h1>{t['h1']}</h1>
   <p class="sub">{t['sub']}</p>
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-    <a class="btn" href="#b2b">{'🏢 Deploy For My Business ($199+)' if not is_es else '🏢 Implementar para mi Negocio ($199+)'}</a>
+    <a class="btn" href="#b2b">{'Deploy For My Business ($199+)' if not is_es else 'Implementar para mi Negocio ($199+)'}</a>
+    <a class="btn2" href="{base}/paygate/merchant">{'Merchant Dashboard' if not is_es else 'Panel de Ventas'}</a>
     <a class="btn2" href="#setup">{t['cta1']}</a>
-    <a class="btn2" href="#demo">{'🧪 Interactive Preview (10s)' if not is_es else '🧪 Probar Flujo Interactivo (10s)'}</a>
+    <a class="btn2" href="#demo">{'Interactive Preview (10s)' if not is_es else 'Probar Flujo Interactivo (10s)'}</a>
     <a class="btn2" href="https://t.me/ChainGuardVaultBot?start=vip" target="_blank">{t['cta2']}</a>
   </div>
 
@@ -1171,8 +1174,8 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
   </div>
 
   <div class="card" id="invoice-link" style="margin-top:20px;border-color:#38bdf8;">
-    <h2 style="margin:0 0 6px;">{'🔗 Create Instant USDT / USDC Payment Link (No Bot Required)' if not is_es else '🔗 Crear Link de Cobro Instantáneo en USDT / USDC (Sin Bot)'}</h2>
-    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Generate a hosted non-custodial invoice page + optional HMAC-SHA256 webhook callback in 5 seconds. Funds settle 100% directly to your wallet.' if not is_es else 'Generá un link de cobro directo a tu wallet + webhook firmado HMAC-SHA256 en 5 segundos, sin custodia ni intermediarios.'}</p>
+    <h2 style="margin:0 0 6px;">{'Create Instant USDT / USDC Payment Link (No Bot Required)' if not is_es else 'Crear Link de Cobro Instantaneo en USDT / USDC (Sin Bot)'}</h2>
+    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Generate a hosted non-custodial invoice page + optional HMAC-SHA256 webhook callback in 5 seconds. Funds settle 100% directly to your wallet.' if not is_es else 'Genera un link de cobro directo a tu wallet + webhook firmado HMAC-SHA256 en 5 segundos, sin custodia ni intermediarios.'}</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
       <div>
         <label>{'Invoice Title' if not is_es else 'Concepto / Producto'}</label>
@@ -1183,7 +1186,7 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
         <input id="invAmt" type="number" step="0.5" value="50"/>
       </div>
       <div>
-        <label>{'Network (0% fee)' if not is_es else 'Red (0% comisión)'}</label>
+        <label>{'Network (0% fee)' if not is_es else 'Red (0% comision)'}</label>
         <select id="invNet">
           <option value="polygon">Polygon</option>
           <option value="bsc">BSC BEP20</option>
@@ -1201,7 +1204,7 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
     <label>{'Webhook Callback URL (optional — receives signed X-PayGate-Signature)' if not is_es else 'URL Webhook (opcional — recibe evento invoice.paid firmado)'}</label>
     <input id="invHook" placeholder="https://yourapp.com/webhooks/paygate"/>
     <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="createInstantInvoice()">{'⚡ Generate Hosted Checkout URL' if not is_es else '⚡ Generar Link de Cobro'}</button>
+      <button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="createInstantInvoice()">{'Generate Hosted Checkout URL' if not is_es else 'Generar Link de Cobro'}</button>
       <span id="invCreateMsg" style="font-size:.9rem;"></span>
     </div>
     <div id="invCreateOut" style="margin-top:12px;"></div>
@@ -1252,8 +1255,8 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
   </div>
 
   <div class="card" id="demo" style="margin-top:20px;border-color:#38bdf8;">
-    <h2 style="margin:0 0 6px;">{'🧪 Interactive Buyer Experience (No Bot Token Needed)' if not is_es else '🧪 Simulador del Flujo de Compra (Sin Token previo)'}</h2>
-    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Click below to preview the exact non-custodial flow your paying members see inside Telegram:' if not is_es else 'Hacé clic abajo para ver exactamente lo que vive un miembro al pagar en tu comunidad VIP:'}</p>
+    <h2 style="margin:0 0 6px;">{'Interactive Buyer Experience (No Bot Token Needed)' if not is_es else 'Simulador del Flujo de Compra (Sin Token previo)'}</h2>
+    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Click below to preview the exact non-custodial flow your paying members see inside Telegram:' if not is_es else 'Hace clic abajo para ver exactamente lo que vive un miembro al pagar en tu comunidad VIP:'}</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">
       <div>
         <label>{'Demo Plan' if not is_es else 'Plan Demo'}</label>
@@ -1273,15 +1276,15 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
         </select>
       </div>
       <div style="display:flex;align-items:flex-end;">
-        <button class="btn2" style="width:100%;border-color:#38bdf8;color:#7dd3fc;" onclick="runDemoFlow()">{'▶ Simulate Instant Settlement' if not is_es else '▶ Simular Cobro + Acceso VIP'}</button>
+        <button class="btn2" style="width:100%;border-color:#38bdf8;color:#7dd3fc;" onclick="runDemoFlow()">{'Simulate Instant Settlement' if not is_es else 'Simular Cobro + Acceso VIP'}</button>
       </div>
     </div>
     <div id="demoOutput" style="margin-top:12px;"></div>
   </div>
 
   <div class="card" id="b2b" style="margin-top:20px;border-color:#f59e0b;">
-    <span class="badge" style="border-color:#f59e0b;color:#fcd34d;background:rgba(245,158,11,.12);">{'DONE-FOR-YOU B2B INFRASTRUCTURE' if not is_es else 'IMPLEMENTACIÓN B2B LLAVE EN MANO'}</span>
-    <h2 style="margin:10px 0 6px;">{'🏢 Want Us to Deploy & Customize Your Payment Infrastructure?' if not is_es else '🏢 ¿Querés que lo dejemos funcionando a medida para tu negocio?'}</h2>
+    <span class="badge" style="border-color:#f59e0b;color:#fcd34d;background:rgba(245,158,11,.12);">{'DONE-FOR-YOU B2B INFRASTRUCTURE' if not is_es else 'IMPLEMENTACION B2B LLAVE EN MANO'}</span>
+    <h2 style="margin:10px 0 6px;">{'Want Us to Deploy & Customize Your Payment Infrastructure?' if not is_es else 'Queres que lo dejemos funcionando a medida para tu negocio?'}</h2>
     <p style="margin:0 0 12px;font-size:.9rem;color:#94a3b8;">{'Built for paid Telegram signal/alpha rooms, SaaS teams blocked by Stripe/Whop, and crypto businesses requiring custom bot/API automation. Pay directly in USDT/USDC with 50% kickoff deposit.' if not is_es else 'Ideal para comunidades VIP de trading/educación, SaaS sin Stripe/Whop o empresas cripto que necesitan bots y automatización Python a medida. Cobro directo en USDT/USDC con seña del 50%.'}</p>
     <div class="grid" style="margin:12px 0;">
       <div class="card" style="background:#070b14;border-color:#f59e0b;">
@@ -1315,7 +1318,7 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
     <label>{'Project URL / Channel & Integration Scope' if not is_es else 'Link o detalle de qué necesitás automatizar'}</label>
     <textarea id="b2bScope" rows="2" placeholder="{'e.g. 400-member VIP Telegram channel migrating off manual TRC20/Whop + webhook to Notion/CRM' if not is_es else 'Ej: canal VIP de señales cobrando USDT manual, quiero bot + expulsión automática + alertas'}"></textarea>
     <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <button class="btn" style="background:#f59e0b;color:#1f1300;" onclick="createB2BOrder()">{'🚀 Request Deployment & Get USDT Invoice' if not is_es else '🚀 Reservar Implementación y Ver Factura USDT'}</button>
+      <button class="btn" style="background:#f59e0b;color:#1f1300;" onclick="createB2BOrder()">{'Request Deployment & Get USDT Invoice' if not is_es else 'Reservar Implementacion y Ver Factura USDT'}</button>
       <span id="b2bMsg" style="font-size:.9rem;"></span>
     </div>
     <div id="b2bOrderBox" style="margin-top:12px;"></div>
@@ -1372,9 +1375,9 @@ async function crearBot() {{
   msg.textContent = 'Bot live!';
   const panelUrl = location.origin + d.panel_url;
   out.innerHTML = `<div class="card" style="background:#052e16;border-color:#10b981;">
-    <div>✅ <strong>@${{d.bot.bot_username}}</strong> is live: <a style="color:#6ee7b7;font-weight:800;" href="https://t.me/${{d.bot.bot_username}}" target="_blank">t.me/${{d.bot.bot_username}}</a></div>
-    <div style="margin-top:8px;">🔐 <strong>Save your private Admin Panel link:</strong><br/><code>${{panelUrl}}</code></div>
-    <div style="margin-top:8px;"><a class="btn" href="${{panelUrl}}">Open Admin Panel →</a></div>
+    <div><strong>@${{d.bot.bot_username}}</strong> is live: <a style="color:#6ee7b7;font-weight:800;" href="https://t.me/${{d.bot.bot_username}}" target="_blank">t.me/${{d.bot.bot_username}}</a></div>
+    <div style="margin-top:8px;"><strong>Save your private Admin Panel link:</strong><br/><code>${{panelUrl}}</code></div>
+    <div style="margin-top:8px;"><a class="btn" href="${{panelUrl}}">Open Admin Panel -></a></div>
   </div>`;
 }}
 
@@ -1445,7 +1448,7 @@ async function verifyB2BOrder(orderId) {{
     return;
   }}
   vm.className = 'ok';
-  vm.textContent = '✅ Deposit verified on-chain! Status: ' + d.order.status + '. Delivery kickoff confirmed.';
+  vm.textContent = 'Deposit verified on-chain! Status: ' + d.order.status + '. Delivery kickoff confirmed.';
 }}
 
 async function createInstantInvoice() {{
@@ -1466,7 +1469,7 @@ async function createInstantInvoice() {{
   if (!r.ok) {{ m.className = 'err'; m.textContent = d.detail || 'Error creating invoice.'; return; }}
   m.className = 'ok'; m.textContent = 'Invoice created!';
   out.innerHTML = `<div class="card" style="background:#052e16;border-color:#10b981;">
-    <div>✅ <strong>Checkout Link Ready:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a></div>
+    <div><strong>Checkout Link Ready:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a></div>
     <div style="margin-top:6px;font-size:.84rem;">ID: <code>${{d.invoice.invoice_id}}</code></div>
   </div>`;
 }}
@@ -1594,5 +1597,233 @@ async function activarPro() {{
   const d = await r.json();
   if (r.ok) location.reload();
   else {{ m.style.color = '#fca5a5'; m.textContent = d.detail || 'No verificado'; }}
+}}
+</script></body></html>"""
+
+
+def render_paygate_merchant_dashboard_html(base: str, wallet: str, invoices: list[dict[str, Any]]) -> str:
+    """Self-serve non-custodial Merchant Revenue Dashboard & Python/TypeScript/HTML snippet generator."""
+    clean_wal = wallet.strip()
+    snippet_wal = clean_wal or "0xYourWalletAddress"
+    wal_esc = html.escape(clean_wal)
+    snip_esc = html.escape(snippet_wal)
+    s_evm = StudioConfig.PHANTOM_EVM_ADDRESS or "0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD"
+
+    paid_invs = [i for i in invoices if i.get("status") == "paid"]
+    pending_invs = [i for i in invoices if i.get("status") == "pending"]
+    expired_invs = [i for i in invoices if i.get("status") == "expired"]
+    total_settled = round(sum(float(i.get("paid_amount_usd") or i.get("amount_usd") or 0.0) for i in paid_invs), 2)
+
+    rows_html = ""
+    for inv in invoices[:50]:
+        inv_id = str(inv.get("invoice_id") or "")
+        inv_id_esc = html.escape(inv_id)
+        title_esc = html.escape(str(inv.get("title") or ""))
+        net_raw = str(inv.get("network") or "").lower()
+        net_esc = html.escape(net_raw.upper())
+        status_raw = str(inv.get("status") or "pending").lower()
+        amt_val = float(inv.get("paid_amount_usd") or inv.get("amount_usd") or 0.0) if status_raw == "paid" else float(inv.get("amount_usd") or 0.0)
+        tx = str(inv.get("tx_hash") or "")
+        exp_prefix = _EXPLORER_TX_URLS.get(net_raw, "")
+        tx_link = f'<a href="{html.escape(exp_prefix + tx)}" target="_blank" style="color:#38bdf8;">Explorer</a>' if (tx and exp_prefix) else "-"
+        status_color = "#10b981" if status_raw == "paid" else ("#f59e0b" if status_raw == "pending" else "#94a3b8")
+        rows_html += (
+            f"<tr>"
+            f"<td><code>{inv_id_esc}</code></td>"
+            f"<td>{title_esc}</td>"
+            f"<td><strong>${amt_val:.2f}</strong></td>"
+            f"<td>{net_esc}</td>"
+            f"<td style='color:{status_color};font-weight:800;'>{html.escape(status_raw.upper())}</td>"
+            f"<td><a href='{base}/paygate/checkout/{inv_id_esc}' target='_blank' style='color:#6ee7b7;'>Checkout</a> · "
+            f"<a href='{base}/paygate/receipt/{inv_id_esc}' target='_blank' style='color:#cbd5e1;'>Receipt</a> · {tx_link}</td>"
+            f"</tr>"
+        )
+    if not rows_html:
+        empty_msg = (
+            f"No invoices recorded yet for <code>{wal_esc}</code>. Create your first 1-click checkout link below."
+            if clean_wal
+            else "Enter your EVM (0x...) or Solana wallet above to load settled volume, invoices, and pre-filled integration snippets."
+        )
+        rows_html = f"<tr><td colspan='6' style='color:#94a3b8;'>{empty_msg}</td></tr>"
+
+    py_snippet = html.escape(
+        "from paygate_sdk import mcp_tool_paywall, require_usdt_payment\n\n"
+        "@mcp_tool_paywall(\n"
+        "    price_usd=9.0,\n"
+        f'    merchant_wallet="{snippet_wal}",\n'
+        '    network="base",\n'
+        "    free_calls=3,\n"
+        "    billing_days=30,\n"
+        '    title="Pro MCP Pass",\n'
+        ")\n"
+        "def pro_tool(query: str, customer_ref: str = \"\", paygate_invoice_id: str = \"\"):\n"
+        "    return {\"ok\": True, \"query\": query}\n\n"
+        "@app.get(\"/api/pro\")\n"
+        "@require_usdt_payment(price_usd=5.0, recipient_wallet=\"" + snippet_wal + "\")\n"
+        "async def pro_api(request):\n"
+        "    return {\"ok\": True}"
+    )
+
+    ts_snippet = html.escape(
+        'import { withMcpToolPaywall, paygateExpressMiddleware } from "./sdk-js/index.mjs";\n\n'
+        "export const proTool = withMcpToolPaywall(\n"
+        "  {\n"
+        "    priceUsd: 9.0,\n"
+        f'    merchantWallet: "{snippet_wal}",\n'
+        '    network: "base",\n'
+        "    freeCalls: 3,\n"
+        "    billingDays: 30,\n"
+        '    title: "Pro MCP Pass",\n'
+        "  },\n"
+        "  async ({ query }) => ({ ok: true, query })\n"
+        ");\n\n"
+        'app.get("/api/pro", paygateExpressMiddleware({ priceUsd: 5.0, merchantWallet: "' + snippet_wal + '" }), (req, res) => {\n'
+        "  res.json({ ok: true, paygate: req.paygate });\n"
+        "});"
+    )
+
+    widget_snippet = html.escape(
+        f'<a data-paygate-merchant="{snippet_wal}" data-paygate-amount="29" data-paygate-network="base" data-paygate-title="Pro Access">\n'
+        "  Pay $29 USDC/USDT\n"
+        "</a>\n"
+        f'<script src="{base}/paygate/widget.js"></script>'
+    )
+
+    return f"""<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Merchant Revenue Dashboard — PayGate USDT</title>
+<style>
+  *{{box-sizing:border-box}} body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,sans-serif;line-height:1.55}}
+  .wrap{{max-width:1040px;margin:0 auto;padding:24px 16px 64px}}
+  .card{{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:18px;margin-bottom:16px}}
+  .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}}
+  .kpi{{background:#070b14;border:1px solid #1e293b;border-radius:10px;padding:14px}}
+  .kpi .v{{font-size:1.65rem;font-weight:900;color:#10b981;margin-top:4px}}
+  .btn{{display:inline-block;background:#10b981;color:#02160f;font-weight:800;padding:10px 18px;border-radius:10px;border:none;cursor:pointer;text-decoration:none;font-size:.92rem}}
+  .btn2{{display:inline-block;background:#1e293b;color:#f8fafc;font-weight:700;padding:8px 14px;border-radius:10px;border:1px solid #334155;cursor:pointer;text-decoration:none;font-size:.84rem}}
+  label{{display:block;font-size:.82rem;color:#cbd5e1;font-weight:700;margin-top:10px}}
+  input,select{{width:100%;padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#070b14;color:#f8fafc;font-size:.92rem;margin-top:4px}}
+  table{{width:100%;border-collapse:collapse;font-size:.85rem}} th,td{{text-align:left;padding:9px 8px;border-bottom:1px solid #1e293b}}
+  pre{{background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;overflow-x:auto;font-size:.8rem;color:#6ee7b7;margin:8px 0 0}}
+  code{{background:#020617;padding:2px 6px;border-radius:5px;color:#6ee7b7;font-size:.82rem;word-break:break-all}}
+</style></head><body><div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+    <div>
+      <div style="font-size:.76rem;color:#10b981;font-weight:800;">NON-CUSTODIAL MERCHANT REVENUE DASHBOARD</div>
+      <h1 style="margin:4px 0 0;font-size:1.6rem;">PayGate USDT Self-Serve Control Center</h1>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn2" href="{base}/paygate">PayGate Home</a>
+      <a class="btn2" href="https://github.com/EzequielLech/paygate-usdt" target="_blank">GitHub SDK (Python + TS)</a>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#38bdf8;">
+    <form method="get" action="{base}/paygate/merchant" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:260px;">
+        <label style="margin-top:0;">Inspect Merchant Payout Wallet (0x... EVM or Solana, Zero Signup)</label>
+        <input name="wallet" value="{wal_esc}" placeholder="0x... or Solana address"/>
+      </div>
+      <button type="submit" class="btn">Load Wallet Ledger</button>
+    </form>
+  </div>
+
+  <div class="grid">
+    <div class="kpi"><div style="font-size:.78rem;color:#94a3b8;">Total Settled Volume</div><div class="v">${total_settled:.2f} USDT</div></div>
+    <div class="kpi"><div style="font-size:.78rem;color:#94a3b8;">Paid Invoices</div><div class="v">{len(paid_invs)}</div></div>
+    <div class="kpi"><div style="font-size:.78rem;color:#94a3b8;">Pending Invoices</div><div class="v" style="color:#fcd34d;">{len(pending_invs)}</div></div>
+    <div class="kpi"><div style="font-size:.78rem;color:#94a3b8;">Expired / Total</div><div class="v" style="color:#cbd5e1;">{len(expired_invs)} / {len(invoices)}</div></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 10px;font-size:1.15rem;">Invoice Ledger ({html.escape(clean_wal) if clean_wal else 'No wallet selected'})</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Invoice ID</th><th>Title</th><th>Amount</th><th>Network</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>{rows_html}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#10b981;">
+    <h2 style="margin:0 0 6px;font-size:1.15rem;">1-Click Payment Link Creator</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+      <div><label>Title</label><input id="mTitle" value="Pro Access"/></div>
+      <div><label>Amount (USD)</label><input id="mAmt" type="number" step="0.5" value="29"/></div>
+      <div><label>Network</label><select id="mNet"><option value="base">Base</option><option value="polygon">Polygon</option><option value="arbitrum">Arbitrum</option><option value="bsc">BSC BEP20</option><option value="solana">Solana</option><option value="ethereum">Ethereum</option></select></div>
+      <div><label>Merchant Wallet</label><input id="mWal" value="{snip_esc}"/></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn" onclick="createDashInvoice()">Create Hosted Checkout</button>
+      <span id="mMsg" style="font-size:.88rem;color:#38bdf8;"></span>
+    </div>
+    <div id="mOut" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 6px;font-size:1.15rem;">Copy-Paste Integration Snippets (Pre-Filled for {snip_esc})</h2>
+    <div style="margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:.9rem;color:#7dd3fc;">Python SDK (@mcp_tool_paywall + @require_usdt_payment)</strong>
+        <button class="btn2" onclick="copyPre('pySnip', this)">Copy Python</button>
+      </div>
+      <pre id="pySnip">{py_snippet}</pre>
+    </div>
+    <div style="margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:.9rem;color:#6ee7b7;">TypeScript / Node.js SDK (withMcpToolPaywall + paygateExpressMiddleware)</strong>
+        <button class="btn2" onclick="copyPre('tsSnip', this)">Copy TypeScript</button>
+      </div>
+      <pre id="tsSnip">{ts_snippet}</pre>
+    </div>
+    <div style="margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:.9rem;color:#fcd34d;">HTML / Markdown 1-Line Embed Widget</strong>
+        <button class="btn2" onclick="copyPre('wSnip', this)">Copy HTML</button>
+      </div>
+      <pre id="wSnip">{widget_snippet}</pre>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#f59e0b;">
+    <div style="font-size:.84rem;color:#f59e0b;font-weight:800;">UPGRADE &amp; HOSTED PASSES (INSTANT NON-CUSTODIAL DELIVERY)</div>
+    <p style="font-size:.88rem;color:#cbd5e1;margin:6px 0 10px;">Unlock unlimited high-rate RPC verification, full vulnerability remediation patches, and hosted infrastructure:</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network=base&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1">$0.50 · 24h Micro Pass</a>
+      <a class="btn2" style="border-color:#10b981;color:#6ee7b7;" href="{base}/paygate/pay?merchant={s_evm}&amount=2&network=base&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7">$2.00 · 7-Day Starter Pass</a>
+      <a class="btn2" style="border-color:#a855f7;color:#d8b4fe;" href="{base}/paygate/pay?merchant={s_evm}&amount=9&network=base&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30">$9.00 · 30-Day Unlimited</a>
+      <a class="btn2" style="border-color:#f59e0b;color:#fcd34d;" href="{base}/paygate/pay?merchant={s_evm}&amount=79&network=polygon&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650">$79.00 · Lifetime White-Label</a>
+      <a class="btn" href="{base}/paygate#b2b">$199 · Turnkey B2B Deployment</a>
+    </div>
+  </div>
+</div>
+<script>
+function copyPre(id, btn) {{
+  const el = document.getElementById(id);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent || '');
+  btn.textContent = 'Copied!';
+  setTimeout(() => {{ btn.textContent = 'Copy'; }}, 1800);
+}}
+async function createDashInvoice() {{
+  const msg = document.getElementById('mMsg');
+  const out = document.getElementById('mOut');
+  msg.textContent = 'Creating invoice...';
+  const r = await fetch('/api/v1/paygate/invoices', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{
+      title: document.getElementById('mTitle').value.trim() || 'Pro Access',
+      amount_usd: parseFloat(document.getElementById('mAmt').value || '29'),
+      network: document.getElementById('mNet').value,
+      merchant_wallet: document.getElementById('mWal').value.trim()
+    }})
+  }});
+  const d = await r.json();
+  if (!r.ok) {{ msg.style.color = '#fca5a5'; msg.textContent = d.detail || 'Error creating invoice.'; return; }}
+  msg.style.color = '#34d399'; msg.textContent = 'Checkout link ready!';
+  out.innerHTML = `<div style="background:#052e16;border:1px solid #10b981;border-radius:10px;padding:10px;">
+    <strong>Checkout URL:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a>
+    <span style="margin-left:8px;font-size:.82rem;">(ID: <code>${{d.invoice.invoice_id}}</code>)</span>
+  </div>`;
 }}
 </script></body></html>"""

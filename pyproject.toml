@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paygate-usdt"
-version = "2.5.1"
-description = "Self-hosted & cloud non-custodial USDT/USDC payment gateway with hosted invoices, HMAC-SHA256 webhooks, HTTP 402 (x402 v2) FastAPI paywall, CLI, Telegram VIP bot automation, and Stdio/HTTP MCP Server."
+version = "2.6.0"
+description = "Self-hosted & cloud non-custodial USDT/USDC payment gateway with hosted invoices, HMAC-SHA256 webhooks, HTTP 402 (x402 v2) FastAPI & Express paywalls, Python + TypeScript/Node.js SDKs, CLI, Telegram VIP bot, and Stdio/HTTP MCP Server."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -41,8 +41,8 @@ paygate-usdt = "paygate_sdk.cli:main"
 
 [project.urls]
 Homepage = "https://chainguard-studio-production.up.railway.app/paygate"
-Repository = "https://github.com/EzeLich/paygate-usdt"
-Issues = "https://github.com/EzeLich/paygate-usdt/issues"
+Repository = "https://github.com/EzequielLech/paygate-usdt"
+Issues = "https://github.com/EzequielLech/paygate-usdt/issues"
 
 [tool.setuptools.packages.find]
 include = ["paygate_sdk*", "app*"]

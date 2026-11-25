@@ -1,0 +1,35 @@
+{
+  "name": "paygate-usdt",
+  "version": "2.6.0",
+  "description": "Zero-dependency TypeScript/Node.js SDK for non-custodial multi-chain USDT/USDC invoices, HMAC-SHA256 webhooks, x402 v2 Express paywalls, and @modelcontextprotocol/sdk tool monetization.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.mjs",
+      "types": "./index.d.ts"
+    }
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EzequielLech/paygate-usdt.git"
+  },
+  "keywords": [
+    "usdt",
+    "usdc",
+    "x402",
+    "mcp",
+    "paywall",
+    "non-custodial",
+    "crypto-payments",
+    "web3"
+  ]
+}

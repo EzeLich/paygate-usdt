@@ -1,39 +1,42 @@
-# PayGate USDT v2.5 — Non-Custodial Stablecoin Payment Gateway, `@mcp_tool_paywall`, Subscriptions & 8-Tool MCP Server
+# PayGate USDT v2.6 — Non-Custodial Stablecoin Payment Gateway, Python & TypeScript/Node.js SDKs, `@mcp_tool_paywall` & 8-Tool MCP Server
 
-[![CI](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzeLich/paygate-usdt/actions/workflows/ci.yml)
+[![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
 [![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzeLich%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzeLich)
 [![PayGate USDT MCP server](https://glama.ai/mcp/servers/EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/servers/EzeLich/paygate-usdt)
 [![PayGate USDT MCP connector](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://python.org)
+[![Node.js 18+ TypeScript](https://img.shields.io/badge/Node.js-18%2B%20TypeScript%20SDK-339933.svg)](sdk-js/index.d.ts)
 [![Protocol: x402 v2](https://img.shields.io/badge/Protocol-x402%20v2-ff6600.svg)](https://chainguard-studio-production.up.railway.app/.well-known/x402.json)
 [![MCP Native](https://img.shields.io/badge/MCP-Streamable%20HTTP%202025--06--18-38bdf8.svg)](https://chainguard-studio-production.up.railway.app/paygate/mcp)
 [![Custody: Zero](https://img.shields.io/badge/Custody-0%25%20Non--Custodial-10b981.svg)](https://chainguard-studio-production.up.railway.app/paygate)
 
-**Monetize any Python MCP Server (`@mcp_tool_paywall`), FastAPI Route (`@require_usdt_payment`), SaaS Subscription, or Telegram VIP Group in USDT & USDC across 6 blockchains straight to your own self-custody wallet.**
+**Monetize any Python or TypeScript/Node.js MCP Server (`@mcp_tool_paywall` / `withMcpToolPaywall`), FastAPI / Express Route (`@require_usdt_payment` / `paygateExpressMiddleware`), SaaS Subscription, or Telegram VIP Group in USDT & USDC across 6 blockchains straight to your own self-custody wallet.**
 
-No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut. Includes **1-Click Multi-Chain Switcher** (`Base`, `Polygon`, `Arbitrum`, `BSC`, `Ethereum`, `Solana`) and **Zero-Tx-Hash On-Chain Payment Auto-Detection**.
+No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut. Includes **1-Click Multi-Chain Switcher** (`Base`, `Polygon`, `Arbitrum`, `BSC`, `Ethereum`, `Solana`), **Zero-Tx-Hash On-Chain Payment Auto-Detection**, and a **Self-Serve Merchant Revenue Dashboard (`/paygate/merchant`)**.
 
 - **Live Cloud Sandbox & Demo:** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
+- **Self-Serve Merchant Revenue Dashboard:** [https://chainguard-studio-production.up.railway.app/paygate/merchant](https://chainguard-studio-production.up.railway.app/paygate/merchant)
 - **Live Telegram VIP Bot Demo:** [@ChainGuardVaultBot (`?start=vip`)](https://t.me/ChainGuardVaultBot?start=vip)
 - **Live Dedicated MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/paygate/mcp` (`create_usdt_invoice`, `get_usdt_invoice`, `list_usdt_invoices`, `verify_usdt_invoice`, `expire_usdt_invoice`, `check_usdt_subscription`, `verify_onchain_transfer`, `build_x402_paywall_challenge`)
-- **Sister 15-Tool Web3 Security & Vault Recovery MCP (`EzeLich/chainguard-mcp`):** [https://github.com/EzeLich/chainguard-mcp](https://github.com/EzeLich/chainguard-mcp)
+- **Sister 15-Tool Web3 Security & CI Gate (`EzequielLech/chainguard-mcp`):** [https://github.com/EzequielLech/chainguard-mcp](https://github.com/EzequielLech/chainguard-mcp)
 
 ---
 
 ## Why Builders Choose PayGate USDT Over Custodial Processors
 
-| Feature | PayGate USDT v2.3 | Custodial Gateways / Whop / InviteMember |
+| Feature | PayGate USDT v2.6 | Custodial Gateways / Whop / InviteMember |
 |---|---|---|
 | **Settlement Destination** | **100% direct buyer -> your wallet** (Phantom, MetaMask, Ledger, Safe, Exchange) | Held by intermediary; payout delays / freezes |
 | **Transaction Fees** | **$0% cut** on settlements (self-hosted MIT) | 1%–10% + withdrawal minimums |
+| **SDK Runtimes** | **Python + Zero-Dependency TypeScript/Node.js (`sdk-js/`)** | Often single-language or heavy SDKs |
 | **Networks Supported** | **Polygon, BSC (BEP-20), Base, Arbitrum, Ethereum, Solana SPL** | Limited or custodian-locked |
-| **Hosted Invoice Pages + Webhooks** | ✅ `/paygate/checkout/{id}` + `X-PayGate-Signature` (`HMAC-SHA256`) | Often requires merchant KYB/KYC |
-| **Non-Custodial SaaS Subscriptions** | ✅ `customer_ref` + `billing_days` + `/api/v1/paygate/subscriptions/check` (renewal stacking, 0 `MAX_UINT256` approvals) | Requires cards or infinite token approvals |
-| **FastAPI HTTP 402 (`x402 v2`) Decorator** | ✅ `@require_usdt_payment(...)` with `PAYMENT-REQUIRED` header + anti-replay | Rare / separate SDK |
-| **Telegram Paid VIP Automation** | ✅ 60-second bot onboarding, 1-time invite links, auto-kick on expiry | High % revenue share |
-| **MCP Server for AI Agents** | ✅ Streamable HTTP (`2025-03-26`, `ping`, `resources`, `prompts`) + Stdio MCP | Not supported |
-| **Security & Reproducibility** | **100% pure auditable Python**, full `pytest` + GitHub Actions CI | Black-box binaries / closed SaaS |
+| **Hosted Invoice Pages + Webhooks** | Included (`/paygate/checkout/{id}` + `X-PayGate-Signature` `HMAC-SHA256`) | Often requires merchant KYB/KYC |
+| **Non-Custodial SaaS Subscriptions** | Included (`customer_ref` + `billing_days` + `/api/v1/paygate/subscriptions/check`) | Requires cards or infinite token approvals |
+| **HTTP 402 (`x402 v2`) Paywalls** | Included (FastAPI `@require_usdt_payment` + Express `paygateExpressMiddleware`) | Rare / separate SDK |
+| **Telegram Paid VIP Automation** | Included (60-second bot onboarding, 1-time invite links, auto-kick on expiry) | High % revenue share |
+| **MCP Server for AI Agents** | Included (Streamable HTTP `2025-03-26`, `ping`, `resources`, `prompts` + Stdio MCP) | Not supported |
+| **Security & Reproducibility** | **100% auditable Python & ESM Node.js**, full `pytest` + `node --test` + CI | Black-box binaries / closed SaaS |
 
 ---
 
@@ -83,6 +86,43 @@ from paygate_sdk import mcp_tool_paywall
 )
 def analyze_market_alpha(symbol: str, customer_ref: str = "", paygate_invoice_id: str = "") -> dict:
     return {"symbol": symbol, "verdict": "STRONG_BUY"}
+```
+
+### 0b. TypeScript / Node.js Quickstart (`sdk-js/`, Zero npm Dependencies)
+
+Monetize any TypeScript `@modelcontextprotocol/sdk` MCP tool or Express / Next.js API route in 1 wrapper with native Node.js 18+ `fetch` and `node:crypto`:
+
+```ts
+import {
+  withMcpToolPaywall,
+  paygateExpressMiddleware,
+  verifyWebhookSignature,
+} from "./sdk-js/index.mjs";
+
+// 1. Wrap any TypeScript MCP tool with 3 free calls + $9/30d non-custodial unlock
+export const proSignalTool = withMcpToolPaywall(
+  {
+    priceUsd: 9.0,
+    merchantWallet: "0xYourEvmOrSolanaWalletAddress",
+    network: "base",
+    freeCalls: 3,
+    billingDays: 30,
+    title: "Pro MCP Tool Pass",
+  },
+  async ({ symbol }) => ({ symbol, verdict: "STRONG_BUY" })
+);
+
+// 2. Protect any Express / Connect HTTP route with x402 v2 + X-PayGate-Invoice
+app.get(
+  "/api/pro-signal",
+  paygateExpressMiddleware({
+    priceUsd: 5.0,
+    merchantWallet: "0xYourEvmWalletAddress",
+    network: "base",
+    description: "Institutional Trading Signal",
+  }),
+  (req, res) => res.json({ ok: true, signal: "ETH/USDC", paygate: req.paygate })
+);
 ```
 
 ### 1. Protect any FastAPI Endpoint with HTTP 402 (`x402 v2` Direct USDT/USDC)
@@ -220,10 +260,11 @@ docker compose up --build
 ## Run Tests Locally
 
 ```bash
-git clone https://github.com/EzeLich/paygate-usdt.git
+git clone https://github.com/EzequielLech/paygate-usdt.git
 cd paygate-usdt
 pip install -r requirements.txt
 pytest -v
+node --test sdk-js/test.mjs
 ```
 
 Zero external API keys or private wallet keys are required to run the test suite.
@@ -243,7 +284,8 @@ Want this running for your business without touching servers, RPC failovers, or 
 | **Managed Cloud VIP Bot** | **$29 USDT/mo** (7-day free trial) | [Launch Bot Free in 60s](https://chainguard-studio-production.up.railway.app/paygate#setup) |
 | **Lifetime White-Label Bot License** | **$79 USDT** one-time | [Pay $79 Polygon/Base USDT/USDC — Instant Master License Key](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=79&network=polygon&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650) |
 | **Turnkey B2B VIP Gate Deployment (24h)** | **$199 USDT** (`$99` deposit) | [Pay $99 Kickoff Deposit (Polygon)](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=99&network=polygon&title=Turnkey+VIP+Gate+Deployment+50pct+Deposit&issue_pass=1) · [Book B2B Scope](https://chainguard-studio-production.up.railway.app/paygate#b2b) |
-| **Custom Crypto Bot + API / Exchange Automation** | **$499 USDT** (`$249` deposit) | [Pay $249 Kickoff Deposit (Polygon)](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=249&network=polygon&title=Custom+Bot+%2B+Exchange+API+50pct+Deposit&issue_pass=1) · [Submit GitHub Inquiry](https://github.com/EzeLich/paygate-usdt/issues/new?template=b2b_custom_deployment.yml) |
+| **Custom Crypto Bot + API / Exchange Automation** | **$499 USDT** (`$249` deposit) | [Pay $249 Kickoff Deposit (Polygon)](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=249&network=polygon&title=Custom+Bot+%2B+Exchange+API+50pct+Deposit&issue_pass=1) · [Submit GitHub Inquiry](https://github.com/EzequielLech/paygate-usdt/issues/new?template=b2b_custom_deployment.yml) |
 
 - **Book Directly with On-Chain Checkout:** [https://chainguard-studio-production.up.railway.app/paygate#b2b](https://chainguard-studio-production.up.railway.app/paygate#b2b)
-- **Submit a Custom Scope via GitHub Issues:** [Open a B2B Custom Integration Request](https://github.com/EzeLich/paygate-usdt/issues/new?template=b2b_custom_deployment.yml)
+- **Self-Serve Merchant Dashboard:** [https://chainguard-studio-production.up.railway.app/paygate/merchant](https://chainguard-studio-production.up.railway.app/paygate/merchant)
+- **Submit a Custom Scope via GitHub Issues:** [Open a B2B Custom Integration Request](https://github.com/EzequielLech/paygate-usdt/issues/new?template=b2b_custom_deployment.yml)
