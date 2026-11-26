@@ -877,10 +877,10 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     amt_f = float(invoice["amount_usd"])
     amt = f"{amt_f:.2f}"
     is_paid = invoice.get("status") == "paid"
-    badge_bg = "rgba(16,185,129,.16)" if is_paid else "rgba(245,158,11,.15)"
-    badge_fg = "#6ee7b7" if is_paid else "#fcd34d"
-    badge_bd = "#10b981" if is_paid else "#f59e0b"
-    status_txt = "PAID · CONFIRMED ON-CHAIN" if is_paid else "PENDING ON-CHAIN TRANSFER"
+    badge_bg = "rgba(16,185,129,.14)" if is_paid else "rgba(245,158,11,.13)"
+    badge_fg = "#34d399" if is_paid else "#fbbf24"
+    badge_bd = "rgba(16,185,129,.45)" if is_paid else "rgba(245,158,11,.42)"
+    status_txt = "PAID · CONFIRMED ON-CHAIN" if is_paid else "AWAITING ON-CHAIN SETTLEMENT"
     tx_esc = html.escape(invoice.get("tx_hash") or "")
     redir = html.escape(invoice.get("redirect_url") or "")
     api_pass = (invoice.get("metadata") or {}).get("api_pass") or {}
@@ -913,106 +913,135 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             net_choices.append(("solana", "Solana (SPL + SOL)"))
             net_choices.append(("bitcoin", "Bitcoin (BTC)"))
         for c_net, c_lbl in net_choices:
-            active_style = "background:#10b981;color:#02160f;border-color:#10b981;font-weight:800;" if c_net == net_raw else "background:#070b14;color:#cbd5e1;border-color:#334155;"
-            pills.append(
-                f'<a href="?network={c_net}" style="display:inline-block;padding:5px 11px;border-radius:999px;border:1px solid;font-size:.78rem;text-decoration:none;{active_style}">{c_lbl}</a>'
-            )
+            active_cls = "net-pill active" if c_net == net_raw else "net-pill"
+            pills.append(f'<a href="?network={c_net}" class="{active_cls}">{c_lbl}</a>')
         chain_switcher_html = (
-            '<div style="margin-bottom:14px;">'
-            '<div style="font-size:.78rem;color:#94a3b8;font-weight:700;margin-bottom:6px;">SWITCH PAYMENT NETWORK (PAY IN USDT, USDC, OR NATIVE ETH/BNB/POL/SOL/BTC):</div>'
-            f'<div style="display:flex;gap:6px;flex-wrap:wrap;">{"".join(pills)}</div>'
+            '<div class="section-block">'
+            '<div class="kicker">SWITCH PAYMENT NETWORK · 7 RAILS (USDT / USDC / NATIVE)</div>'
+            f'<div class="pill-row">{"".join(pills)}</div>'
             '</div>'
         )
     if not is_paid and is_studio_inv:
         s_evm = StudioConfig.PHANTOM_EVM_ADDRESS or "0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD"
         t_net = net_raw if net_raw in ("base", "polygon", "arbitrum", "bsc", "ethereum") else "base"
         tier_switcher_html = (
-            '<div style="margin-bottom:14px;padding:11px 13px;background:#070b14;border:1px solid #1e293b;border-radius:10px;">'
-            '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">INSTANT AUTOMATED ON-SCREEN DELIVERY (NO EMAIL OR SIGNUP NEEDED):</div>'
-            '<div style="font-size:.79rem;color:#cbd5e1;margin-bottom:8px;">Upon 1 block confirmation (~3–5s on EVM/Solana), this screen automatically reveals your <code>cg_live_...</code> API / White-Label License Key + SHA-256 receipt. Switch plan in 1 click:</div>'
-            '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">$0.50 · 24h Test Pass (50 calls)</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" style="padding:4px 10px;border-radius:8px;border:1px solid #10b981;color:#6ee7b7;text-decoration:none;font-size:.78rem;font-weight:700;">$2.00 · 7-Day Pass (250 calls)</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" style="padding:4px 10px;border-radius:8px;border:1px solid #a855f7;color:#d8b4fe;text-decoration:none;font-size:.78rem;font-weight:700;">$9.00 · 30-Day Unlimited</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" style="padding:4px 10px;border-radius:8px;border:1px solid #f59e0b;color:#fcd34d;text-decoration:none;font-size:.78rem;font-weight:700;">$79.00 · Lifetime White-Label</a>'
+            '<div class="delivery-banner">'
+            '<div class="delivery-kicker">INSTANT AUTOMATED ON-SCREEN DELIVERY · NO EMAIL OR SIGNUP</div>'
+            '<div class="delivery-sub">As soon as 1 block confirms (~3–5s on EVM/Solana), this screen automatically unlocks your <code>cg_live_...</code> API / White-Label Key and SHA-256 receipt. Quick-switch plan:</div>'
+            '<div class="tier-row">'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" class="tier-chip chip-sky">$0.50 · 24h Test Pass</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" class="tier-chip chip-em">$2.00 · 7-Day Pass</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" class="tier-chip chip-vio">$9.00 · 30-Day Pro</a>'
+            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" class="tier-chip chip-amb">$79.00 · Lifetime White-Label</a>'
             '</div></div>'
         )
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
         btns = []
         if usdt_addr:
-            btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">1-Click Pay ${amt} USDT (Browser Wallet)</button>""")
+            btns.append(f"""<button class="btn-primary" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">1-Click Pay ${amt} USDT</button>""")
         if usdc_addr:
-            btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">1-Click Pay ${amt} USDC (Browser Wallet)</button>""")
+            btns.append(f"""<button class="btn-secondary btn-sky" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">1-Click Pay ${amt} USDC</button>""")
         if native_sym:
             est_lbl = f"~{native_est:.6f} " if native_est > 0 else ""
-            btns.append(f"""<button class="btn2" style="border-color:#a855f7;color:#d8b4fe;" onclick="payNativeWithWallet()">1-Click Pay {est_lbl}{native_sym} (Native)</button>""")
+            btns.append(f"""<button class="btn-secondary btn-vio" onclick="payNativeWithWallet()">1-Click Pay {est_lbl}{native_sym} (Native)</button>""")
         if btns:
-            one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
+            one_click_btns = f"""<div class="action-grid">{''.join(btns)}</div>"""
     elif not is_paid and net_raw == "solana":
         est_lbl = f"~{native_est:.5f} " if native_est > 0 else ""
         one_click_btns = (
-            '<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">'
-            f'<button class="btn" onclick="paySolanaNativeWithWallet()">1-Click Pay {est_lbl}SOL (Phantom / Solflare)</button>'
+            '<div class="action-grid">'
+            f'<button class="btn-primary" onclick="paySolanaNativeWithWallet()">1-Click Pay {est_lbl}SOL (Phantom / Solflare)</button>'
             '</div>'
         )
 
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=136x136&margin=6&data={urllib.parse.quote(wallet)}"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=168x168&margin=6&data={urllib.parse.quote(wallet)}"
 
     paid_key_html = (
-        f"""<div style="margin-top:10px;background:#020617;border:1px solid #38bdf8;border-radius:10px;padding:12px;">
-          <div style="font-size:.84rem;color:#7dd3fc;font-weight:800;">Your Instant MCP &amp; Pro API License Key Is Active ({api_pass.get('calls_remaining', 1000)} calls · Plan: {html.escape(str(api_pass.get('plan_id') or 'pro_pass'))}):</div>
-          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
-            <code style="flex:1;padding:8px 10px;display:block;">{api_key_esc}</code>
-            <button class="btn" onclick="navigator.clipboard.writeText('{api_key_esc}');this.textContent='Copied Key!'">Copy Key</button>
+        f"""<div class="key-box">
+          <div class="kicker" style="color:#7dd3fc;">ACTIVE LICENSE &amp; API KEY ({api_pass.get('calls_remaining', 1000)} CALLS · {html.escape(str(api_pass.get('plan_id') or 'pro_pass')).upper()})</div>
+          <div class="copy-row" style="margin-top:8px;">
+            <code class="mono-box">{api_key_esc}</code>
+            <button class="btn-primary" style="padding:10px 16px;" onclick="navigator.clipboard.writeText('{api_key_esc}');this.textContent='Copied'">Copy Key</button>
           </div>
-          <div style="font-size:.78rem;color:#94a3b8;margin-top:6px;">Pass header <code>X-API-Key: {api_key_esc}</code> on <code>POST {base}/mcp</code> or any <code>/api/v1/x402/*</code> route to unlock full patches, 25 DeFi pools &amp; 8-chain portfolios.</div>
+          <div class="hint" style="margin-top:8px;">Pass header <code>X-API-Key: {api_key_esc}</code> on <code>POST {base}/mcp</code> or any <code>/api/v1/x402/*</code> route to unlock full patches, 25 DeFi pools, and 8-chain telemetry.</div>
         </div>"""
         if api_key_esc
         else ""
     )
 
+    asset_desc = (
+        f"BTC (~{native_est:.8f} BTC)"
+        if (net_raw == "bitcoin" and native_est > 0)
+        else ("USDT / USDC" + (f" or ~{native_est:.6f} {native_sym}" if (native_sym and native_est > 0) else (f" or {native_sym}" if native_sym else "")))
+    )
+
     paid_block = (
-        f"""<div class="card" style="background:#052e16;border-color:#10b981;margin-top:16px;">
-          <div style="font-weight:800;color:#6ee7b7;">Payment Confirmed On-Chain</div>
-          <div style="font-size:.88rem;margin-top:6px;">TX: <code>{tx_esc}</code></div>
+        f"""<div class="glass-card confirmed-card">
+          <div class="confirmed-head">
+            <span class="dot-live" style="background:#10b981;"></span>
+            <span>Payment Confirmed On-Chain</span>
+          </div>
+          <div class="hint" style="margin-top:8px;">Settled TX Hash: <code>{tx_esc}</code></div>
           {paid_key_html}
-          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
-            <a class="btn2" href="{receipt_url}">View Verifiable SHA-256 Receipt</a>
-            {f'<a class="btn" href="{redir}">Continue to Merchant →</a>' if redir else ''}
+          <div class="pill-row" style="margin-top:16px;">
+            <a class="btn-secondary" href="{receipt_url}">View Verifiable SHA-256 Receipt</a>
+            {f'<a class="btn-primary" href="{redir}">Continue to Merchant -&gt;</a>' if redir else ''}
           </div>
         </div>"""
         if is_paid
-        else f"""<div class="card" style="margin-top:16px;">
-          {tier_switcher_html}
-          {chain_switcher_html}
-          {one_click_btns}
-          <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;">
-            <div style="flex:1;min-width:240px;">
-              <label>1. Send exact amount (<strong>${amt}</strong> {'BTC (~' + f'{native_est:.8f} BTC)' if (net_raw == 'bitcoin' and native_est > 0) else ('USDT / USDC' + (f' or ~{native_est:.6f} {native_sym}' if (native_sym and native_est > 0) else (f' or {native_sym}' if native_sym else '')))} on <strong>{net}</strong>) to merchant wallet:</label>
-              <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
-                <code id="mWal" style="flex:1;padding:10px;display:block;">{wallet}</code>
-                <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
-                <button class="btn2" onclick="navigator.clipboard.writeText('{amt}');this.textContent='Copied ${amt}!'">Copy ${amt}</button>
+        else f"""<div class="checkout-grid">
+          <div class="glass-card main-pane">
+            <div class="stepper">
+              <div class="step done"><span>1</span> Select Network</div>
+              <div class="step active"><span>2</span> Send Transfer</div>
+              <div class="step"><span>3</span> Auto-Unlock</div>
+            </div>
+            {chain_switcher_html}
+            {one_click_btns}
+            <div class="section-block">
+              <label class="field-label">Direct Transfer Address · Send <strong>${amt} {asset_desc}</strong> on <strong>{net}</strong></label>
+              <div class="copy-row">
+                <code id="mWal" class="mono-box">{wallet}</code>
+                <button class="btn-secondary" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied'">Copy Address</button>
+                <button class="btn-secondary" onclick="navigator.clipboard.writeText('{amt}');this.textContent='Copied ${amt}'">Copy ${amt}</button>
               </div>
-              <div style="margin-top:8px;font-size:.78rem;color:#94a3b8;">Mobile / Wallet URI: <code>{pay_uri}</code></div>
+              <div class="hint" style="margin-top:8px;">Wallet URI: <code>{pay_uri}</code></div>
             </div>
-            <div style="text-align:center;background:#fff;padding:6px;border-radius:10px;">
-              <img src="{qr_url}" width="124" height="124" alt="Wallet QR" style="display:block;border-radius:6px;" onerror="this.parentElement.style.display='none'"/>
-              <div style="font-size:.68rem;color:#0f172a;font-weight:800;margin-top:2px;">SCAN IN MOBILE WALLET</div>
+            <div class="section-block" style="margin-bottom:0;">
+              <label class="field-label">On-Chain Confirmation (Auto-polls every 12s · No TX hash required)</label>
+              <div class="verify-bar">
+                <button class="btn-primary" style="width:100%;" onclick="autoDetectInv(false)">I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
+              </div>
+              <div class="copy-row" style="margin-top:10px;">
+                <input id="invTx" class="tx-input" placeholder="Optional: paste 0x... / Solana / Bitcoin TXID for instant check"/>
+                <button class="btn-secondary" onclick="verifyInv()">Verify TX</button>
+              </div>
+              <div class="live-status">
+                <span class="dot-live"></span>
+                <span id="invMsg">Listening for on-chain transfer to {wallet[:10]}... on {net}...</span>
+              </div>
             </div>
           </div>
-          <label style="margin-top:14px;">2. Verify payment (auto-detects your transfer on-chain every 12s or click below):</label>
-          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-            <button class="btn" onclick="autoDetectInv(false)">I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-            <input id="invTx" style="flex:1;min-width:220px;" placeholder="Or paste 0x... / Solana / Bitcoin TXID"/>
-            <button class="btn2" onclick="verifyInv()">Verify by TX Hash</button>
-          </div>
-          <div id="invMsg" style="margin-top:10px;font-size:.9rem;color:#38bdf8;">Listening for on-chain transfer to {wallet[:10]}... on {net}...</div>
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e293b;font-size:.8rem;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <span>Short on {net} USDT/USDC?</span>
-            <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">Swap Any Token or Dust into USDT/USDC -></a>
+
+          <div class="side-pane">
+            <div class="glass-card qr-card">
+              <div class="kicker" style="text-align:center;">MOBILE WALLET SCAN</div>
+              <div class="qr-frame">
+                <img src="{qr_url}" width="164" height="164" alt="Wallet QR" onerror="this.parentElement.style.display='none'"/>
+                <div class="qr-cap">SCAN IN MOBILE WALLET</div>
+              </div>
+              <div class="summary-rows">
+                <div class="s-row"><span>Settlement</span><strong>0% Fee · Direct</strong></div>
+                <div class="s-row"><span>Custody</span><strong>Non-Custodial</strong></div>
+                <div class="s-row"><span>Finality</span><strong>~3–12 seconds</strong></div>
+                <div class="s-row"><span>Receipt</span><strong>SHA-256 Proof</strong></div>
+              </div>
+              <div class="side-foot">
+                <span>Short on {net} stablecoins?</span>
+                <a href="{base}/recover" target="_blank">Sweep Dust / Reclaim SOL -&gt;</a>
+              </div>
+            </div>
+            {tier_switcher_html}
           </div>
         </div>"""
     )
@@ -1020,29 +1049,109 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Pay ${amt} {html.escape(native_sym or 'USDT')} — {title} | PayGate USDT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
-  *{{box-sizing:border-box}} body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,sans-serif;line-height:1.55}}
-  .wrap{{max-width:680px;margin:0 auto;padding:32px 16px 64px}}
-  .card{{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:20px}}
-  .badge{{display:inline-block;padding:4px 11px;border-radius:999px;background:{badge_bg};border:1px solid {badge_bd};color:{badge_fg};font-size:.76rem;font-weight:800}}
-  .btn{{display:inline-block;background:#10b981;color:#02160f;font-weight:800;padding:10px 18px;border-radius:10px;border:none;cursor:pointer;text-decoration:none}}
-  .btn2{{display:inline-block;background:#1e293b;color:#f8fafc;font-weight:700;padding:10px 14px;border-radius:10px;border:1px solid #334155;cursor:pointer;text-decoration:none}}
-  input{{padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#070b14;color:#f8fafc;font-size:.92rem}}
-  label{{display:block;font-size:.84rem;color:#cbd5e1;font-weight:700}}
-  code{{background:#020617;padding:4px 8px;border-radius:6px;color:#6ee7b7;font-size:.82rem;word-break:break-all}}
-</style></head><body><div class="wrap">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-    <span class="badge">{status_txt}</span>
-    <span style="font-size:.82rem;color:#94a3b8;">Invoice <code>{inv_id}</code> · {net}</span>
+  :root{{--bg:#050811;--surface:rgba(13,20,36,.78);--border:rgba(148,163,184,.16);--text:#f1f5f9;--muted:#94a3b8;--em:#10b981;--sky:#38bdf8;--vio:#a78bfa;--amb:#f59e0b;}}
+  *{{box-sizing:border-box}}
+  body{{margin:0;min-height:100vh;background:radial-gradient(900px 420px at 15% -10%,rgba(16,185,129,.14),transparent 60%),radial-gradient(800px 420px at 90% 0%,rgba(56,189,248,.11),transparent 58%),var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}}
+  .topbar{{border-bottom:1px solid var(--border);background:rgba(5,8,17,.75);backdrop-filter:blur(14px);position:sticky;top:0;z-index:20}}
+  .topbar-inner{{max-width:1020px;margin:0 auto;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}}
+  .brand{{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:.98rem;letter-spacing:-.02em}}
+  .brand-mark{{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#10b981,#06b6d4);display:inline-flex;align-items:center;justify-content:center;color:#02160f;font-weight:900;font-size:.78rem}}
+  .nav-links{{display:flex;gap:14px;align-items:center;font-size:.82rem}}
+  .nav-links a{{color:var(--muted);text-decoration:none;font-weight:600}} .nav-links a:hover{{color:#fff}}
+  .wrap{{max-width:1020px;margin:0 auto;padding:28px 20px 68px}}
+  .hero-strip{{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:22px 24px;border-radius:18px;background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(16px)}}
+  .status-pill{{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;background:{badge_bg};border:1px solid {badge_bd};color:{badge_fg};font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}}
+  .inv-meta{{font-size:.8rem;color:var(--muted);margin-top:8px;font-family:'JetBrains Mono',monospace}}
+  .inv-title{{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(1.35rem,2.6vw,1.8rem);font-weight:800;letter-spacing:-.03em;margin:10px 0 0;color:#fff}}
+  .price-box{{text-align:right}}
+  .price-main{{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(2rem,3.6vw,2.6rem);font-weight:800;letter-spacing:-.04em;background:linear-gradient(135deg,#34d399,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1}}
+  .price-sub{{font-size:.82rem;color:var(--muted);margin-top:4px;font-weight:600}}
+  .checkout-grid{{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}}
+  @media(max-width:860px){{.checkout-grid{{grid-template-columns:1fr}} .price-box{{text-align:left}}}}
+  .glass-card{{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;backdrop-filter:blur(16px)}}
+  .confirmed-card{{border-color:rgba(16,185,129,.5);background:rgba(5,46,22,.45)}}
+  .confirmed-head{{display:flex;align-items:center;gap:9px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:1.1rem;color:#6ee7b7}}
+  .stepper{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}}
+  .step{{display:inline-flex;align-items:center;gap:7px;font-size:.76rem;font-weight:600;color:var(--muted)}}
+  .step span{{width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;background:rgba(148,163,184,.12);color:var(--muted)}}
+  .step.done{{color:#6ee7b7}} .step.done span{{background:rgba(16,185,129,.22);color:#34d399}}
+  .step.active{{color:#fff}} .step.active span{{background:linear-gradient(135deg,#10b981,#06b6d4);color:#02160f}}
+  .section-block{{margin-bottom:18px}}
+  .kicker{{font-size:.7rem;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}}
+  .pill-row{{display:flex;gap:7px;flex-wrap:wrap}}
+  .net-pill{{display:inline-block;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:rgba(7,11,20,.7);color:#cbd5e1;font-size:.78rem;font-weight:600;text-decoration:none;transition:all .15s ease}}
+  .net-pill:hover{{border-color:rgba(56,189,248,.55);color:#fff}}
+  .net-pill.active{{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#02160f;font-weight:800;box-shadow:0 0 18px rgba(16,185,129,.25)}}
+  .action-grid{{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px}}
+  .btn-primary{{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10b981,#06b6d4);color:#02160f;font-weight:800;padding:11px 18px;border-radius:11px;border:none;cursor:pointer;text-decoration:none;font-size:.86rem;letter-spacing:-.01em;transition:transform .12s ease,box-shadow .15s ease}}
+  .btn-primary:hover{{transform:translateY(-1px);box-shadow:0 8px 24px rgba(16,185,129,.28)}}
+  .btn-secondary{{display:inline-flex;align-items:center;justify-content:center;background:rgba(30,41,59,.75);color:#f8fafc;font-weight:700;padding:10px 14px;border-radius:11px;border:1px solid rgba(148,163,184,.24);cursor:pointer;text-decoration:none;font-size:.84rem;transition:border-color .15s ease,background .15s ease}}
+  .btn-secondary:hover{{border-color:rgba(248,250,252,.45);background:rgba(30,41,59,.95)}}
+  .btn-sky{{border-color:rgba(56,189,248,.45);color:#7dd3fc}}
+  .btn-vio{{border-color:rgba(167,139,250,.45);color:#ddd6fe}}
+  .field-label{{display:block;font-size:.82rem;color:#cbd5e1;font-weight:600;margin-bottom:7px}}
+  .copy-row{{display:flex;gap:8px;align-items:center;flex-wrap:wrap}}
+  .mono-box{{flex:1;min-width:200px;background:rgba(2,6,23,.85);border:1px solid var(--border);padding:10px 12px;border-radius:10px;color:#6ee7b7;font-family:'JetBrains Mono',monospace;font-size:.8rem;word-break:break-all;display:block}}
+  .tx-input{{flex:1;min-width:210px;padding:10px 12px;border-radius:10px;border:1px solid rgba(148,163,184,.22);background:rgba(2,6,23,.85);color:#f8fafc;font-family:'JetBrains Mono',monospace;font-size:.82rem;outline:none}}
+  .tx-input:focus{{border-color:#38bdf8}}
+  .hint{{font-size:.76rem;color:var(--muted);word-break:break-all}}
+  code{{font-family:'JetBrains Mono',monospace;background:rgba(2,6,23,.85);padding:2px 6px;border-radius:6px;color:#6ee7b7;font-size:.78rem}}
+  .live-status{{margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.22);display:flex;align-items:center;gap:9px;font-size:.82rem;color:#7dd3fc}}
+  .dot-live{{width:8px;height:8px;border-radius:999px;background:#38bdf8;flex-shrink:0;box-shadow:0 0 10px rgba(56,189,248,.9);animation:pulse 1.8s infinite}}
+  @keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:.35}}}}
+  .side-pane{{display:flex;flex-direction:column;gap:14px}}
+  .qr-card{{text-align:center}}
+  .qr-frame{{display:inline-block;background:#fff;padding:10px;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.35);margin:6px 0 14px}}
+  .qr-frame img{{display:block;border-radius:8px}}
+  .qr-cap{{font-size:.66rem;color:#0f172a;font-weight:800;letter-spacing:.06em;margin-top:6px}}
+  .summary-rows{{text-align:left;border-top:1px solid var(--border);padding-top:12px}}
+  .s-row{{display:flex;justify-content:space-between;font-size:.8rem;padding:5px 0;color:var(--muted)}}
+  .s-row strong{{color:#e2e8f0;font-weight:600}}
+  .side-foot{{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}}
+  .side-foot a{{color:#38bdf8;font-weight:700;text-decoration:none}}
+  .delivery-banner{{background:var(--surface);border:1px solid rgba(56,189,248,.24);border-radius:16px;padding:16px}}
+  .delivery-kicker{{font-size:.7rem;font-weight:800;letter-spacing:.07em;color:#38bdf8;margin-bottom:6px}}
+  .delivery-sub{{font-size:.78rem;color:#cbd5e1;margin-bottom:10px;line-height:1.5}}
+  .tier-row{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}
+  .tier-chip{{display:block;text-align:center;padding:7px 8px;border-radius:9px;border:1px solid;font-size:.74rem;font-weight:700;text-decoration:none}}
+  .chip-sky{{border-color:rgba(56,189,248,.45);color:#7dd3fc;background:rgba(56,189,248,.07)}}
+  .chip-em{{border-color:rgba(16,185,129,.45);color:#6ee7b7;background:rgba(16,185,129,.07)}}
+  .chip-vio{{border-color:rgba(167,139,250,.45);color:#ddd6fe;background:rgba(167,139,250,.07)}}
+  .chip-amb{{border-color:rgba(245,158,11,.45);color:#fcd34d;background:rgba(245,158,11,.07)}}
+  .key-box{{margin-top:14px;background:rgba(2,6,23,.82);border:1px solid rgba(56,189,248,.4);border-radius:12px;padding:14px}}
+  .footer{{margin-top:26px;text-align:center;font-size:.78rem;color:#64748b}}
+  .footer a{{color:#94a3b8;text-decoration:none;font-weight:600}} .footer a:hover{{color:#38bdf8}}
+</style></head><body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{base}/paygate"><span class="brand-mark">PG</span><span>PayGate USDT</span></a>
+    <nav class="nav-links">
+      <a href="{base}/">ChainGuard Studio</a>
+      <a href="{base}/paygate">Create Checkout</a>
+      <a href="{base}/recover">Vault Recovery</a>
+      <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank">GitHub SDK</a>
+    </nav>
   </div>
-  <div class="card">
-    <div style="color:#94a3b8;font-size:.86rem;">NON-CUSTODIAL CRYPTO CHECKOUT</div>
-    <h1 style="margin:6px 0 8px;font-size:1.55rem;">{title}</h1>
-    <div style="font-size:2.1rem;font-weight:900;color:#10b981;">${amt} <span style="font-size:.95rem;color:#94a3b8;">USDT / USDC{' or ' + html.escape(native_sym) if native_sym else ''} ({net})</span></div>
+</header>
+<div class="wrap">
+  <div class="hero-strip">
+    <div>
+      <span class="status-pill">{status_txt}</span>
+      <h1 class="inv-title">{title}</h1>
+      <div class="inv-meta">Invoice <code>{inv_id}</code> · Network: {net} · 0% Gateway Cut</div>
+    </div>
+    <div class="price-box">
+      <div class="price-main">${amt}</div>
+      <div class="price-sub">USDT / USDC{' or ' + html.escape(native_sym) if native_sym else ''} on {net}</div>
+    </div>
   </div>
   {paid_block}
-  <div style="margin-top:20px;text-align:center;font-size:.8rem;color:#64748b;">
-    Powered by <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank" style="color:#38bdf8;">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate" style="color:#94a3b8;">Create your own checkout</a>
+  <div class="footer">
+    Non-custodial settlement powered by <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate">Launch your own 0% crypto checkout</a>
   </div>
 </div>
 <script>
@@ -1287,161 +1396,230 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
     evm_addr = html.escape(StudioConfig.PHANTOM_EVM_ADDRESS)
     sol_addr = html.escape(StudioConfig.PHANTOM_SOL_ADDRESS)
     is_es = (lang or "en").strip().lower().startswith("es")
+    pro_checkout_url = f"{base}/paygate/pay?merchant={evm_addr}&amount=9&network=base&title=PayGate+Cloud+Pro+30d&issue_pass=1&billing_days=30"
+    wl_checkout_url = f"{base}/paygate/pay?merchant={evm_addr}&amount=79&network=base&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650"
+    turnkey_checkout_url = f"{base}/paygate/pay?merchant={evm_addr}&amount=99&network=base&title=Turnkey+VIP+Gate+50pct+Deposit"
+    custom_checkout_url = f"{base}/paygate/pay?merchant={evm_addr}&amount=249&network=base&title=Custom+Bot+and+API+50pct+Deposit"
     t = {
-        "badge": "PAYGATE USDT · 0% COMMISSION · DIRECT SELF-CUSTODY WALLET" if not is_es else "PAYGATE USDT · 0% COMISION POR VENTA · DIRECTO A TU WALLET",
-        "title": "PayGate USDT — Monetize Private Telegram Groups & Digital Goods in USDT (No Stripe, No KYC)" if not is_es else "PayGate USDT — Cobrá tu Canal VIP o Producto Digital en USDT sin Banco ni Whop",
-        "h1": 'Monetize Private Telegram Groups & Digital Products in USDT — <span style="color:#10b981;">Zero Stripe, Zero Banks, Zero KYC</span>.' if not is_es else 'Cobrá tu Canal VIP de Telegram o Productos Digitales en USDT — <span style="color:#10b981;">sin banco, sin monotributo ni Whop</span>.',
-        "sub": "Members pay in <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base, or Solana)</strong> straight to your Phantom, Trust, MetaMask, or exchange wallet. The bot verifies transactions on-chain in seconds, issues single-use invite links, and auto-removes expired members." if not is_es else "Tus miembros pagan en <strong>USDT / USDC (Polygon, BSC BEP20, Arbitrum, Base o Solana)</strong> directo a tu billetera Phantom, Trust, Binance o Bitget. El bot verifica la transaccion on-chain en segundos, entrega un enlace privado de 1 solo uso y expulsa automatico al vencer el mes.",
-        "cta1": "Connect My Bot Free (60s)" if not is_es else "Conectar mi Bot Gratis (60 seg)",
-        "cta2": "Live Telegram Demo" if not is_es else "Probar Demo en Telegram",
-        "cta3": "Unlock Unlimited ($29/mo or $79)" if not is_es else "Activar Ilimitado ($29/mes o $79 unico)",
-        "c1k": "1 · NON-CUSTODIAL" if not is_es else "1 · CERO INTERMEDIARIOS",
+        "badge": "PAYGATE USDT v2.8 · 0% COMMISSION · 7 CHAINS · DIRECT SELF-CUSTODY" if not is_es else "PAYGATE USDT v2.8 · 0% COMISION · 7 REDES · AUTO-CUSTODIA DIRECTA",
+        "title": "PayGate USDT — Monetize Private Telegram Groups, Crypto Checkouts & x402 Paywalls" if not is_es else "PayGate USDT — Checkout Cripto sin Custodia, Paywalls x402 y Canales VIP Telegram",
+        "h1": 'Accept USDT, USDC, ETH, SOL &amp; BTC Directly to Your Wallet — <span class="grad-text">Zero Stripe, Zero KYC, 0% Cut</span>.' if not is_es else 'Cobra en USDT, USDC, ETH, SOL y BTC Directo a tu Wallet — <span class="grad-text">Sin Stripe, Sin KYC, 0% Comision</span>.',
+        "sub": "Generate Stripe-grade crypto checkout links, x402 AI agent paywalls, and automated Telegram VIP access bots in 60 seconds. Funds settle directly from buyer to your Phantom, MetaMask, hardware, or exchange address with cryptographic on-chain verification." if not is_es else "Genera links de cobro cripto nivel Stripe, paywalls x402 para agentes IA y bots VIP de Telegram en 60 segundos — sin banco, sin monotributo ni intermediarios. Los fondos van directo del comprador a tu wallet Phantom, MetaMask o exchange con verificacion on-chain automatica.",
+        "cta1": "Create Checkout Link Now" if not is_es else "Crear Link de Cobro Ahora",
+        "cta2": "Connect Telegram VIP Bot" if not is_es else "Conectar Bot VIP Telegram",
+        "c1k": "01 · NON-CUSTODIAL" if not is_es else "01 · CERO CUSTODIA",
         "c1t": "100% direct to your wallet" if not is_es else "100% directo a tu wallet",
-        "c1b": "Funds never touch our wallet or a bank. Every payment settles directly from buyer to your own USDT/USDC address." if not is_es else "La plata nunca pasa por nuestra cuenta ni por un banco. El pago va directo de la wallet de tu comprador a tu propia direccion USDT/USDC.",
-        "c2k": "2 · ZERO MANUAL ADMIN" if not is_es else "2 · CERO TRABAJO MANUAL",
-        "c2t": "1-use links + auto-kick" if not is_es else "Links únicos + expulsión automática",
-        "c2b": "Stop checking screenshots by hand. Every transfer is verified via RPC with anti-replay protection and automated expiry kicks." if not is_es else "Basta de pedir capturas por privado y llevar planillas. Cada compra valida el Tx Hash on-chain y genera un link privado de 1 solo ingreso.",
-        "c3k": "3 · LIVE IN 60 SECONDS" if not is_es else "3 · LISTO EN 60 SEGUNDOS",
-        "c3t": "Zero code required" if not is_es else "Sin programar nada",
-        "c3b": f"Create a bot in @BotFather, paste your token below, add it as admin to your VIP group, and start collecting. ({stats['total_bots']} bots · ${stats['total_volume_usdt']} USDT verified)" if not is_es else f"Creas tu bot en @BotFather, pegas el token abajo, agregas el bot como admin en tu canal privado y ya estas cobrando. ({stats['total_bots']} bots creados · ${stats['total_volume_usdt']} USDT verificados)",
-        "setup_h": "Connect Your VIP Bot in 60s (Free up to 3 members)" if not is_es else "Conecta tu Bot VIP en 60 segundos (Gratis hasta 3 miembros)",
-        "setup_p": "First step: open <strong>@BotFather</strong> in Telegram → send <code>/newbot</code> → copy the token. For private channels, make the bot an admin with Invite &amp; Ban permissions." if not is_es else "Paso previo: en Telegram abrí <strong>@BotFather</strong> → enviá <code>/newbot</code> → copiá el token. Si tenés canal VIP, agregá tu bot como administrador con permiso para invitar y restringir usuarios.",
+        "c1b": "Funds never pass through an intermediary or bank. Every transfer settles directly from buyer to your address across Base, Polygon, Arbitrum, BSC, Ethereum, Solana, and Bitcoin." if not is_es else "El dinero nunca pasa por terceros ni bancos. Cada pago llega directo a tu wallet en Base, Polygon, Arbitrum, BSC, Ethereum, Solana y Bitcoin.",
+        "c2k": "02 · 1-CLICK + AUTO-DETECT" if not is_es else "02 · 1-CLIC + AUTO-DETECCION",
+        "c2t": "Zero manual screenshots" if not is_es else "Cero capturas manuales",
+        "c2b": "1-Click MetaMask & Phantom checkout, mobile QR codes, automatic RPC block detection without pasting TX hashes, anti-replay protection, and HMAC-SHA256 webhooks." if not is_es else "Pago en 1 clic con MetaMask y Phantom, QR movil, deteccion automatica on-chain sin pegar TX hash, proteccion anti-replay y webhooks firmados HMAC-SHA256.",
+        "c3k": "03 · BUILT FOR WEB3 & AI" if not is_es else "03 · LISTO PARA WEB3 E IA",
+        "c3t": "Hosted Cloud or MIT Open-Source" if not is_es else "Nube Gestionada o Open-Source MIT",
+        "c3b": "Use hosted checkout pages immediately (first 3 settled sales free), drop in our Python / TypeScript x402 SDK, or monetize Claude/Cursor MCP tools via Official MCP Registry." if not is_es else "Usa el checkout gestionado al instante (primeras 3 ventas gratis), integra el SDK Python/TypeScript x402 o monetiza herramientas MCP desde el registro oficial.",
+        "setup_h": "Connect Your Telegram VIP Bot in 60s (Free up to 3 active members)" if not is_es else "Conecta tu Bot VIP de Telegram en 60s (Gratis hasta 3 miembros)",
+        "setup_p": "Open <strong>@BotFather</strong> in Telegram, run <code>/newbot</code>, paste the token below, and add the bot as admin with Invite &amp; Ban permissions." if not is_es else "Abri <strong>@BotFather</strong> en Telegram, ejecuta <code>/newbot</code>, pega el token abajo y agrega el bot como administrador con permisos de invitar y restringir.",
         "l_name": "Community / Product Name" if not is_es else "Nombre de tu Comunidad / Producto",
         "l_tok": "Bot Token (@BotFather)" if not is_es else "Token de tu Bot (@BotFather)",
-        "l_net": "Payout Network (0% fee)" if not is_es else "Red donde queres cobrar (0% comision)",
-        "l_wal": "Your Payout Wallet (0x... or Solana)" if not is_es else "Tu Wallet para recibir pagos (0x... o Solana)",
+        "l_net": "Payout Network (0% fee)" if not is_es else "Red de Cobro (0% comision)",
+        "l_wal": "Your Payout Wallet (0x... or Solana)" if not is_es else "Tu Wallet Receptora (0x... o Solana)",
         "l_chan": "Private Channel/Group ID (optional, e.g. -1001234567890)" if not is_es else "ID de tu Canal/Grupo VIP (opcional, ej: -1001234567890)",
         "l_price": "Monthly Price (30 days) in USDT" if not is_es else "Precio Plan Mensual (30 dias) en USDT",
-        "l_deliv": "Post-payment bonus link or instructions (optional — ideal for scripts, courses, files)" if not is_es else "Entrega extra o link privado tras pagar (opcional — ideal para cursos, scripts o archivos)",
+        "l_deliv": "Post-payment bonus link or instructions (optional)" if not is_es else "Entrega extra o link privado tras pagar (opcional)",
         "btn_go": "Launch My Bot Now" if not is_es else "Activar mi Bot Ahora",
-        "up_h": "Transparent Pricing (Direct On-Chain USDC/USDT)" if not is_es else "Planes PayGate USDT (Sin suscripción bancaria)",
-        "f_t": "FREE TRIAL" if not is_es else "PRUEBA GRATIS",
-        "f_b": "Up to 3 active paid members so you can test live RPC verification before paying anything." if not is_es else "Hasta 3 miembros activos reales para probar tu bot y validar cobros on-chain antes de pagar un centavo.",
-        "p_t": "HOSTED PRO ($29/mo)" if not is_es else "PRO HOSTEADO ($29/mes)",
-        "p_b": "Unlimited members, 0% revenue cut, expiry DMs, and 24/7 automated channel kick on our cloud." if not is_es else "Miembros ilimitados, 0% comision sobre ventas, alertas de vencimiento y expulsion automatica 24/7 en nuestro servidor.",
-        "l_t": "LIFETIME LICENSE ($79)" if not is_es else "LICENCIA COMPLETA ($79)",
-        "l_b": "Unlimited members forever with zero monthly fees + white-label branding." if not is_es else "Ilimitado para siempre sin abono mensual + marca blanca para tu comunidad.",
-        "up_box": f"<strong>To upgrade any bot to Pro ($29) or Lifetime ($79):</strong><br/>1) Send $29 or $79 (USDT/USDC) on <strong>Polygon / BSC / Arbitrum / Base</strong> to: <code>{evm_addr}</code><br/>&nbsp;&nbsp;&nbsp;&nbsp;or on <strong>Solana</strong> to: <code>{sol_addr}</code><br/>2) Open your bot's admin panel link above and paste the Tx Hash for instant activation." if not is_es else f"<strong>Para activar Pro ($29) o Licencia ($79) en cualquier bot ya creado:</strong><br/>1) Envia $29 o $79 (USDT/USDC) por <strong>Polygon / BSC / Arbitrum / Base</strong> a: <code>{evm_addr}</code><br/>&nbsp;&nbsp;&nbsp;&nbsp;o por <strong>Solana</strong> a: <code>{sol_addr}</code><br/>2) Abrí el Panel de tu bot (el link que te damos arriba al activarlo) y pegá el Tx Hash para desbloqueo instantaneo en 5 segundos.",
+        "up_h": "Transparent Pricing — 1-Click Direct On-Chain Activation" if not is_es else "Planes Transparentes — Activacion Directa On-Chain en 1 Clic",
     }
     alt_lang = "en" if is_es else "es"
-    alt_lbl = "English" if is_es else "Español"
+    alt_lbl = "English" if is_es else "ES"
     return f"""<!DOCTYPE html><html lang="{'es' if is_es else 'en'}"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>{t['title']}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
+  :root{{--bg:#050811;--surface:rgba(13,20,36,.78);--border:rgba(148,163,184,.16);--text:#f1f5f9;--muted:#94a3b8;--em:#10b981;--sky:#38bdf8;--amb:#f59e0b;}}
   *{{box-sizing:border-box}}
-  body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,-apple-system,sans-serif;line-height:1.55}}
-  .wrap{{max-width:980px;margin:0 auto;padding:24px 16px 64px}}
-  .badge{{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(16,185,129,.12);border:1px solid #10b981;color:#6ee7b7;font-size:.78rem;font-weight:800}}
-  h1{{font-size:clamp(1.75rem,4vw,2.6rem);line-height:1.15;margin:14px 0 10px}}
-  .sub{{color:#94a3b8;font-size:1.03rem;max-width:740px;margin-bottom:20px}}
-  .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin:20px 0}}
-  .card{{background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:18px}}
-  .btn{{display:inline-block;background:#10b981;color:#02160f;font-weight:800;padding:11px 18px;border-radius:10px;border:none;cursor:pointer;text-decoration:none;font-size:.94rem}}
-  .btn2{{display:inline-block;background:#1e293b;color:#f8fafc;font-weight:700;padding:11px 18px;border-radius:10px;border:1px solid #334155;cursor:pointer;text-decoration:none;font-size:.94rem}}
-  label{{display:block;font-size:.82rem;color:#cbd5e1;font-weight:700;margin-top:11px}}
-  input,select,textarea{{width:100%;padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#070b14;color:#f8fafc;font-size:.92rem;margin-top:4px}}
-  code{{background:#020617;padding:3px 7px;border-radius:6px;color:#6ee7b7;font-size:.82rem;word-break:break-all}}
+  body{{margin:0;min-height:100vh;background:radial-gradient(1000px 460px at 18% -12%,rgba(16,185,129,.14),transparent 60%),radial-gradient(850px 420px at 88% -8%,rgba(56,189,248,.12),transparent 58%),var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}}
+  .topbar{{border-bottom:1px solid var(--border);background:rgba(5,8,17,.78);backdrop-filter:blur(16px);position:sticky;top:0;z-index:30}}
+  .topbar-inner{{max-width:1120px;margin:0 auto;padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}}
+  .brand{{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:1rem;letter-spacing:-.02em}}
+  .brand-mark{{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#10b981,#06b6d4);display:inline-flex;align-items:center;justify-content:center;color:#02160f;font-weight:900;font-size:.8rem}}
+  .nav{{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:.82rem}}
+  .nav a{{color:var(--muted);text-decoration:none;font-weight:600}} .nav a:hover{{color:#fff}}
+  .nav-pill{{padding:6px 12px;border-radius:999px;border:1px solid rgba(16,185,129,.45);color:#6ee7b7 !important;background:rgba(16,185,129,.08)}}
+  .wrap{{max-width:1120px;margin:0 auto;padding:34px 20px 80px}}
+  .badge{{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.4);color:#6ee7b7;font-size:.74rem;font-weight:700;letter-spacing:.05em}}
+  h1{{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(2rem,4.5vw,3.1rem);line-height:1.1;letter-spacing:-.035em;margin:16px 0 14px;color:#fff;max-width:920px}}
+  .grad-text{{background:linear-gradient(135deg,#34d399,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+  h2{{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(1.3rem,2.4vw,1.65rem);letter-spacing:-.025em;color:#fff;margin:0 0 8px}}
+  h3{{font-family:'Plus Jakarta Sans',sans-serif;font-size:1.05rem;letter-spacing:-.015em;color:#fff;margin:8px 0 6px}}
+  .sub{{color:var(--muted);font-size:1.02rem;max-width:760px;margin:0 0 24px}}
+  .hero-actions{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px}}
+  .btn{{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10b981,#06b6d4);color:#02160f;font-weight:800;padding:11px 20px;border-radius:11px;border:none;cursor:pointer;text-decoration:none;font-size:.9rem;transition:transform .12s ease,box-shadow .15s ease}}
+  .btn:hover{{transform:translateY(-1px);box-shadow:0 8px 24px rgba(16,185,129,.26)}}
+  .btn2{{display:inline-flex;align-items:center;justify-content:center;background:rgba(30,41,59,.72);color:#f8fafc;font-weight:700;padding:11px 18px;border-radius:11px;border:1px solid rgba(148,163,184,.24);cursor:pointer;text-decoration:none;font-size:.88rem}}
+  .btn2:hover{{border-color:rgba(248,250,252,.45);background:rgba(30,41,59,.95)}}
+  .proof-strip{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:0 0 26px}}
+  .proof-item{{background:rgba(13,20,36,.6);border:1px solid var(--border);border-radius:12px;padding:12px 14px}}
+  .proof-k{{font-size:.68rem;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase}}
+  .proof-v{{font-family:'Plus Jakarta Sans',sans-serif;font-size:.98rem;font-weight:800;color:#fff;margin-top:3px}}
+  .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:22px 0}}
+  .price-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:18px 0}}
+  .card{{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;backdrop-filter:blur(16px)}}
+  .card-featured{{border-color:rgba(16,185,129,.5);box-shadow:0 0 32px rgba(16,185,129,.08)}}
+  .card-sky{{border-color:rgba(56,189,248,.4)}}
+  .card-amb{{border-color:rgba(245,158,11,.42)}}
+  .kicker{{font-size:.72rem;font-weight:800;letter-spacing:.07em;color:#34d399;text-transform:uppercase}}
+  .price-num{{font-family:'Plus Jakarta Sans',sans-serif;font-size:2rem;font-weight:800;letter-spacing:-.04em;color:#fff;margin:8px 0 4px}}
+  .price-num span{{font-size:.82rem;color:var(--muted);font-weight:600;letter-spacing:0}}
+  .feat-list{{margin:12px 0 18px;padding:0;list-style:none;font-size:.84rem;color:#cbd5e1}}
+  .feat-list li{{padding:4px 0;border-bottom:1px solid rgba(148,163,184,.08)}}
+  label{{display:block;font-size:.78rem;color:#cbd5e1;font-weight:600;margin-top:10px}}
+  input,select,textarea{{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(148,163,184,.22);background:rgba(2,6,23,.85);color:#f8fafc;font-size:.88rem;margin-top:4px;font-family:inherit;outline:none}}
+  input:focus,select:focus,textarea:focus{{border-color:#38bdf8}}
+  code{{font-family:'JetBrains Mono',monospace;background:rgba(2,6,23,.85);padding:3px 7px;border-radius:6px;color:#6ee7b7;font-size:.8rem;word-break:break-all}}
   .ok{{color:#34d399;font-weight:700}} .err{{color:#fca5a5;font-weight:700}}
 </style></head>
-<body><div class="wrap">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <span class="badge">{t['badge']}</span>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;border-color:#10b981;color:#6ee7b7;" href="{base}/paygate/merchant">Merchant Dashboard</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="https://github.com/EzequielLech/paygate-usdt" target="_blank">GitHub Open-Source SDK &amp; API</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#invoice-link">{'Instant Invoice' if not is_es else 'Link de Cobro'}</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#demo">{'Live Demo' if not is_es else 'Demo en Vivo'}</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="#b2b">{'Done-For-You B2B' if not is_es else 'Setup Llave en Mano'}</a>
-      <a class="btn2" style="padding:6px 12px;font-size:.8rem;" href="{base}/paygate?lang={alt_lang}">{alt_lbl}</a>
-    </div>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{base}/paygate"><span class="brand-mark">PG</span><span>PayGate USDT</span></a>
+    <nav class="nav">
+      <a href="{base}/">ChainGuard Studio</a>
+      <a href="#invoice-link">{'Link Builder' if not is_es else 'Crear Link'}</a>
+      <a href="#upgrade">{'Pricing' if not is_es else 'Planes'}</a>
+      <a href="#setup">{'Telegram Bot' if not is_es else 'Bot Telegram'}</a>
+      <a href="#b2b">{'Done-For-You' if not is_es else 'B2B a Medida'}</a>
+      <a href="{base}/recover">Vault Recovery</a>
+      <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank">GitHub SDK</a>
+      <a class="nav-pill" href="{base}/paygate/merchant">Merchant Dashboard</a>
+      <a href="{base}/paygate?lang={alt_lang}">{alt_lbl}</a>
+    </nav>
   </div>
-  <div style="margin-top:14px;background:#0b1325;border:1px solid #1e3a5f;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-    <div style="font-size:.88rem;color:#cbd5e1;">
-      <strong>Open-Source Python + TypeScript/Node.js SDK + x402 + Signed Webhooks + MCP Server:</strong>
-      Deploy <code>paygate-usdt</code> self-hosted (MIT) or use our managed cloud &amp; B2B integration.
-    </div>
-    <a class="btn2" style="padding:7px 13px;font-size:.82rem;border-color:#38bdf8;color:#7dd3fc;" href="https://github.com/EzequielLech/paygate-usdt" target="_blank">github.com/EzequielLech/paygate-usdt -></a>
-  </div>
+</header>
+<div class="wrap">
+  <span class="badge">{t['badge']}</span>
   <h1>{t['h1']}</h1>
   <p class="sub">{t['sub']}</p>
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-    <a class="btn" href="#b2b">{'Deploy For My Business ($199+)' if not is_es else 'Implementar para mi Negocio ($199+)'}</a>
-    <a class="btn2" href="{base}/paygate/merchant">{'Merchant Dashboard' if not is_es else 'Panel de Ventas'}</a>
-    <a class="btn2" href="#setup">{t['cta1']}</a>
-    <a class="btn2" href="#demo">{'Interactive Preview (10s)' if not is_es else 'Probar Flujo Interactivo (10s)'}</a>
-    <a class="btn2" href="https://t.me/ChainGuardVaultBot?start=vip" target="_blank">{t['cta2']}</a>
+  <div class="hero-actions">
+    <a class="btn" href="#invoice-link">{t['cta1']}</a>
+    <a class="btn2" href="#upgrade">{'Unlock Cloud Pro ($9/mo) or Lifetime ($79)' if not is_es else 'Activar Cloud Pro ($9/mes) o Licencia ($79)'}</a>
+    <a class="btn2" href="{base}/paygate/merchant">{'Open Merchant Dashboard' if not is_es else 'Abrir Panel de Ventas'}</a>
+    <a class="btn2" href="#setup">{t['cta2']}</a>
   </div>
 
-  <div class="grid">
-    <div class="card">
-      <div style="color:#10b981;font-weight:800;font-size:.82rem;">{t['c1k']}</div>
-      <h3 style="margin:6px 0;">{t['c1t']}</h3>
-      <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c1b']}</p>
-    </div>
-    <div class="card">
-      <div style="color:#10b981;font-weight:800;font-size:.82rem;">{t['c2k']}</div>
-      <h3 style="margin:6px 0;">{t['c2t']}</h3>
-      <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c2b']}</p>
-    </div>
-    <div class="card">
-      <div style="color:#10b981;font-weight:800;font-size:.82rem;">{t['c3k']}</div>
-      <h3 style="margin:6px 0;">{t['c3t']}</h3>
-      <p style="color:#94a3b8;font-size:.9rem;margin:0;">{t['c3b']}</p>
-    </div>
+  <div class="proof-strip">
+    <div class="proof-item"><div class="proof-k">Settlement Cut</div><div class="proof-v">0% Gateway Fee</div></div>
+    <div class="proof-item"><div class="proof-k">Supported Chains</div><div class="proof-v">7 Mainnets (EVM + SOL + BTC)</div></div>
+    <div class="proof-item"><div class="proof-k">Checkout Speed</div><div class="proof-v">1-Click MetaMask &amp; Phantom</div></div>
+    <div class="proof-item"><div class="proof-k">Distribution</div><div class="proof-v">Official MCP Registry &amp; MIT SDK</div></div>
   </div>
 
-  <div class="card" id="invoice-link" style="margin-top:20px;border-color:#38bdf8;">
-    <h2 style="margin:0 0 6px;">{'Create Instant USDT / USDC Payment Link (No Bot Required)' if not is_es else 'Crear Link de Cobro Instantaneo en USDT / USDC (Sin Bot)'}</h2>
-    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Generate a hosted non-custodial invoice page + optional HMAC-SHA256 webhook callback in 5 seconds. Funds settle 100% directly to your wallet.' if not is_es else 'Genera un link de cobro directo a tu wallet + webhook firmado HMAC-SHA256 en 5 segundos, sin custodia ni intermediarios.'}</p>
+  <div class="card card-sky" id="invoice-link">
+    <div class="kicker" style="color:#38bdf8;">{'INSTANT LIVE CHECKOUT BUILDER · 5 SECONDS' if not is_es else 'GENERADOR DE CHECKOUT EN VIVO · 5 SEGUNDOS'}</div>
+    <h2 style="margin-top:6px;">{'Generate a Non-Custodial Crypto Checkout Link' if not is_es else 'Genera un Link de Cobro Cripto sin Custodia'}</h2>
+    <p style="margin:0 0 14px;font-size:.88rem;color:#94a3b8;">{'Paste your wallet address and create a Stripe-grade hosted invoice page with 1-Click wallet pay, QR code, auto-detection, and optional HMAC-SHA256 webhooks. First 3 settled sales are completely free.' if not is_es else 'Pega tu wallet y genera un checkout profesional con pago en 1 clic, codigo QR, deteccion on-chain automatica y webhooks HMAC-SHA256. Tus primeras 3 ventas cobradas son gratis.'}</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
       <div>
-        <label>{'Invoice Title' if not is_es else 'Concepto / Producto'}</label>
-        <input id="invTitle" placeholder="SaaS License / Consulting / VIP Access"/>
+        <label>{'Product or Service Title' if not is_es else 'Concepto / Producto'}</label>
+        <input id="invTitle" placeholder="SaaS Pro Plan / Audit / VIP Access"/>
       </div>
       <div>
-        <label>{'Amount (USDT / USDC)' if not is_es else 'Monto (USDT / USDC)'}</label>
-        <input id="invAmt" type="number" step="0.5" value="50"/>
+        <label>{'Amount (USD Equivalent)' if not is_es else 'Monto (Equivalente USD)'}</label>
+        <input id="invAmt" type="number" step="0.5" value="29"/>
       </div>
       <div>
-        <label>{'Network (0% fee)' if not is_es else 'Red (0% comision)'}</label>
+        <label>{'Default Settlement Chain' if not is_es else 'Red Principal (0% comision)'}</label>
         <select id="invNet">
-          <option value="polygon">Polygon</option>
-          <option value="bsc">BSC BEP20</option>
-          <option value="base">Base</option>
-          <option value="arbitrum">Arbitrum</option>
+          <option value="base">Base (USDC / USDT / ETH)</option>
+          <option value="polygon">Polygon (USDT / USDC / POL)</option>
+          <option value="arbitrum">Arbitrum (USDC / USDT / ETH)</option>
+          <option value="bsc">BSC BEP-20 (USDT / USDC / BNB)</option>
           <option value="solana">Solana (USDC / USDT / SOL)</option>
-          <option value="ethereum">Ethereum (ETH / USDC / USDT)</option>
+          <option value="ethereum">Ethereum (USDC / USDT / ETH)</option>
           <option value="bitcoin">Bitcoin (BTC Taproot)</option>
         </select>
       </div>
       <div>
-        <label>{'Merchant Wallet (0x..., Solana, or BTC)' if not is_es else 'Tu Wallet Receptora (0x..., Solana o BTC)'}</label>
+        <label>{'Your Payout Wallet (0x..., Solana, or BTC)' if not is_es else 'Tu Wallet Receptora (0x..., Solana o BTC)'}</label>
         <input id="invWallet" placeholder="0x..., Solana, or bc1p... BTC address"/>
       </div>
     </div>
-    <label>{'Webhook Callback URL (optional — receives signed X-PayGate-Signature)' if not is_es else 'URL Webhook (opcional — recibe evento invoice.paid firmado)'}</label>
+    <label>{'Webhook Callback URL (optional — receives signed X-PayGate-Signature on settlement)' if not is_es else 'URL Webhook (opcional — recibe evento invoice.paid firmado)'}</label>
     <input id="invHook" placeholder="https://yourapp.com/webhooks/paygate"/>
-    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="createInstantInvoice()">{'Generate Hosted Checkout URL' if not is_es else 'Generar Link de Cobro'}</button>
-      <span id="invCreateMsg" style="font-size:.9rem;"></span>
+    <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn" onclick="createInstantInvoice()">{'Generate Hosted Checkout URL' if not is_es else 'Generar Link de Cobro'}</button>
+      <span id="invCreateMsg" style="font-size:.88rem;"></span>
     </div>
     <div id="invCreateOut" style="margin-top:12px;"></div>
   </div>
 
-  <div class="card" id="setup" style="margin-top:20px;border-color:#10b981;">
-    <h2 style="margin:0 0 6px;">{t['setup_h']}</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="kicker">{t['c1k']}</div>
+      <h3>{t['c1t']}</h3>
+      <p style="color:#94a3b8;font-size:.88rem;margin:0;">{t['c1b']}</p>
+    </div>
+    <div class="card">
+      <div class="kicker">{t['c2k']}</div>
+      <h3>{t['c2t']}</h3>
+      <p style="color:#94a3b8;font-size:.88rem;margin:0;">{t['c2b']}</p>
+    </div>
+    <div class="card">
+      <div class="kicker">{t['c3k']}</div>
+      <h3>{t['c3t']}</h3>
+      <p style="color:#94a3b8;font-size:.88rem;margin:0;">{t['c3b']}</p>
+    </div>
+  </div>
+
+  <div class="card" id="upgrade" style="margin-top:22px;">
+    <div class="kicker">{'ZERO PLATFORM CUT · DIRECT ON-CHAIN ACTIVATION' if not is_es else 'CERO COMISION SOBRE VENTAS · ACTIVACION ON-CHAIN'}</div>
+    <h2 style="margin-top:6px;">{t['up_h']}</h2>
+    <div class="price-grid">
+      <div class="card" style="background:rgba(5,8,17,.65);">
+        <div class="kicker" style="color:#94a3b8;">{'STARTER CLOUD' if not is_es else 'INICIO NUBE'}</div>
+        <div class="price-num">$0 <span>/ 3 settled sales</span></div>
+        <ul class="feat-list">
+          <li>Hosted 7-chain checkout pages</li>
+          <li>1-Click MetaMask &amp; Phantom</li>
+          <li>HMAC-SHA256 webhooks &amp; QR</li>
+          <li>Self-host MIT SDK unlimited free</li>
+        </ul>
+        <a class="btn2" style="width:100%;" href="#invoice-link">{'Start Free Now' if not is_es else 'Empezar Gratis'}</a>
+      </div>
+      <div class="card card-featured" style="background:rgba(5,8,17,.65);">
+        <div class="kicker">{'CLOUD PRO · MOST POPULAR' if not is_es else 'CLOUD PRO · MAS ELEGIDO'}</div>
+        <div class="price-num">$9 <span>USDT / 30 days</span></div>
+        <ul class="feat-list">
+          <li>Unlimited hosted invoices &amp; sales</li>
+          <li>0% cut on all volume forever</li>
+          <li>Instant <code>cg_live_</code> API + MCP Pro Key</li>
+          <li>24/7 RPC failover auto-detection</li>
+        </ul>
+        <a class="btn" style="width:100%;" href="{pro_checkout_url}">{'Unlock Cloud Pro ($9) ->' if not is_es else 'Activar Cloud Pro ($9) ->'}</a>
+      </div>
+      <div class="card card-sky" style="background:rgba(5,8,17,.65);">
+        <div class="kicker" style="color:#38bdf8;">{'LIFETIME WHITE-LABEL' if not is_es else 'LICENCIA VITALICIA'}</div>
+        <div class="price-num">$79 <span>USDT one-time</span></div>
+        <ul class="feat-list">
+          <li>Lifetime unlimited cloud + bots</li>
+          <li>25,000-call Master API / MCP Key</li>
+          <li>White-label branding removal</li>
+          <li>Commercial resell &amp; agency rights</li>
+        </ul>
+        <a class="btn2" style="width:100%;border-color:rgba(56,189,248,.5);color:#7dd3fc;" href="{wl_checkout_url}">{'Buy Lifetime License ($79) ->' if not is_es else 'Comprar Licencia ($79) ->'}</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="setup" style="margin-top:20px;border-color:rgba(16,185,129,.35);">
+    <div class="kicker">{'TELEGRAM VIP AUTOMATION' if not is_es else 'AUTOMATIZACION TELEGRAM VIP'}</div>
+    <h2 style="margin-top:6px;">{t['setup_h']}</h2>
     <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{t['setup_p']}</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
-      <div>
-        <label>{t['l_name']}</label>
-        <input id="bName" placeholder="Alpha Signals VIP"/>
-      </div>
-      <div>
-        <label>{t['l_tok']}</label>
-        <input id="bToken" placeholder="1234567890:AAF..."/>
-      </div>
+      <div><label>{t['l_name']}</label><input id="bName" placeholder="Alpha Signals VIP"/></div>
+      <div><label>{t['l_tok']}</label><input id="bToken" placeholder="1234567890:AAF..."/></div>
       <div>
         <label>{t['l_net']}</label>
         <select id="bNet">
@@ -1452,31 +1630,61 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
           <option value="solana">Solana (Phantom) — USDC / USDT</option>
         </select>
       </div>
-      <div>
-        <label>{t['l_wal']}</label>
-        <input id="bWallet" placeholder="0x... or Solana address"/>
-      </div>
-      <div>
-        <label>{t['l_chan']}</label>
-        <input id="bChan" placeholder="-100..."/>
-      </div>
-      <div>
-        <label>{t['l_price']}</label>
-        <input id="bPrice" type="number" step="0.5" value="25"/>
-      </div>
+      <div><label>{t['l_wal']}</label><input id="bWallet" placeholder="0x... or Solana address"/></div>
+      <div><label>{t['l_chan']}</label><input id="bChan" placeholder="-100..."/></div>
+      <div><label>{t['l_price']}</label><input id="bPrice" type="number" step="0.5" value="25"/></div>
     </div>
     <label>{t['l_deliv']}</label>
     <input id="bDeliv" placeholder="https://... or instructions"/>
     <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
       <button class="btn" onclick="crearBot()">{t['btn_go']}</button>
-      <span id="setupMsg" style="font-size:.9rem;"></span>
+      <a class="btn2" href="#demo">{'Simulate Buyer Flow' if not is_es else 'Simular Flujo de Compra'}</a>
+      <span id="setupMsg" style="font-size:.88rem;"></span>
     </div>
     <div id="setupResult" style="margin-top:12px;"></div>
   </div>
 
-  <div class="card" id="demo" style="margin-top:20px;border-color:#38bdf8;">
-    <h2 style="margin:0 0 6px;">{'Interactive Buyer Experience (No Bot Token Needed)' if not is_es else 'Simulador del Flujo de Compra (Sin Token previo)'}</h2>
-    <p style="margin:0 0 12px;font-size:.88rem;color:#94a3b8;">{'Click below to preview the exact non-custodial flow your paying members see inside Telegram:' if not is_es else 'Hace clic abajo para ver exactamente lo que vive un miembro al pagar en tu comunidad VIP:'}</p>
+  <div class="card card-amb" id="b2b" style="margin-top:20px;">
+    <div class="kicker" style="color:#fbbf24;">{'DONE-FOR-YOU B2B DEPLOYMENT' if not is_es else 'IMPLEMENTACION B2B LLAVE EN MANO'}</div>
+    <h2 style="margin-top:6px;">{'Need Custom Non-Custodial Billing or Bot Infrastructure?' if not is_es else 'Necesitas Infraestructura de Cobro o Bots a Medida?'}</h2>
+    <p style="margin:0 0 14px;font-size:.88rem;color:#94a3b8;">{'Built for trading rooms, Web3 SaaS teams, and AI agent platforms replacing high-fee processors. Kick off directly with a 50% on-chain deposit.' if not is_es else 'Pensado para comunidades VIP, equipos SaaS Web3 y plataformas de agentes IA que buscan independizarse de pasarelas bancarias. Inicio inmediato con 50% de seña on-chain.'}</p>
+    <div class="grid" style="margin:12px 0;">
+      <div class="card" style="background:rgba(5,8,17,.7);border-color:rgba(245,158,11,.35);">
+        <div class="kicker" style="color:#fbbf24;">{'TURNKEY VIP GATE (24H)' if not is_es else 'VIP GATE LLAVE EN MANO (24H)'}</div>
+        <div class="price-num">$199 <span>USDT ($99 deposit)</span></div>
+        <p style="font-size:.85rem;color:#94a3b8;margin:0 0 14px;">{PAYGATE_B2B_PACKAGES['turnkey_199']['summary_es' if is_es else 'summary_en']}</p>
+        <a class="btn2" style="width:100%;border-color:rgba(245,158,11,.5);color:#fcd34d;" href="{turnkey_checkout_url}">{'1-Click Pay $99 Kickoff Deposit ->' if not is_es else 'Pagar Seña $99 en 1 Clic ->'}</a>
+      </div>
+      <div class="card" style="background:rgba(5,8,17,.7);border-color:rgba(56,189,248,.35);">
+        <div class="kicker" style="color:#38bdf8;">{'CUSTOM BOT + API / EXCHANGE' if not is_es else 'BOT A MEDIDA + API / EXCHANGE'}</div>
+        <div class="price-num">$499 <span>USDT ($249 deposit)</span></div>
+        <p style="font-size:.85rem;color:#94a3b8;margin:0 0 14px;">{PAYGATE_B2B_PACKAGES['custom_499']['summary_es' if is_es else 'summary_en']}</p>
+        <a class="btn2" style="width:100%;border-color:rgba(56,189,248,.5);color:#7dd3fc;" href="{custom_checkout_url}">{'1-Click Pay $249 Kickoff Deposit ->' if not is_es else 'Pagar Seña $249 en 1 Clic ->'}</a>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+      <div>
+        <label>{'Solution Package' if not is_es else 'Solucion a contratar'}</label>
+        <select id="b2bPkg">
+          <option value="turnkey_199">{'Turnkey VIP Gate Setup — $199 USDT ($99 deposit)' if not is_es else 'VIP Gate Llave en Mano — $199 USDT ($99 seña)'}</option>
+          <option value="custom_499">{'Custom Crypto Bot + Exchange/API — $499 USDT ($249 deposit)' if not is_es else 'Bot Cripto + API/Exchange a Medida — $499 USDT ($249 seña)'}</option>
+        </select>
+      </div>
+      <div><label>{'Your Name / Brand' if not is_es else 'Tu Nombre / Marca'}</label><input id="b2bName" placeholder="e.g. Alpha Desk / Studio"/></div>
+      <div><label>{'Telegram @handle or Email' if not is_es else 'Tu @usuario Telegram o Email'}</label><input id="b2bContact" placeholder="@yourhandle or founder@domain.com"/></div>
+    </div>
+    <label>{'Project URL / Channel & Integration Scope' if not is_es else 'Link o detalle de que necesitas automatizar'}</label>
+    <textarea id="b2bScope" rows="2" placeholder="{'e.g. 400-member VIP Telegram channel + webhook to CRM' if not is_es else 'Ej: canal VIP de señales cobrando USDT + expulsion automatica'}"></textarea>
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn" style="background:linear-gradient(135deg,#f59e0b,#eab308);color:#1f1300;" onclick="createB2BOrder()">{'Log Scope & Get Direct Deposit Invoice' if not is_es else 'Registrar Proyecto y Ver Factura USDT'}</button>
+      <span id="b2bMsg" style="font-size:.88rem;"></span>
+    </div>
+    <div id="b2bOrderBox" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" id="demo" style="margin-top:20px;">
+    <div class="kicker" style="color:#38bdf8;">{'INTERACTIVE SIMULATOR' if not is_es else 'SIMULADOR INTERACTIVO'}</div>
+    <h2 style="margin-top:6px;">{'Interactive Buyer Experience (10s Preview)' if not is_es else 'Vista Previa del Flujo de Compra (10s)'}</h2>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">
       <div>
         <label>{'Demo Plan' if not is_es else 'Plan Demo'}</label>
@@ -1488,84 +1696,18 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
       <div>
         <label>{'Buyer Chain' if not is_es else 'Red del Comprador'}</label>
         <select id="demoChain">
-          <option value="Polygon">Polygon (USDT / USDC)</option>
-          <option value="BSC BEP20">BNB Smart Chain BEP20 (USDT / USDC)</option>
-          <option value="Base">Base (USDC / USDT)</option>
-          <option value="Arbitrum">Arbitrum One (USDT / USDC)</option>
-          <option value="Solana">Solana (USDC / USDT)</option>
+          <option value="Base">Base (USDC / USDT / ETH)</option>
+          <option value="Polygon">Polygon (USDT / USDC / POL)</option>
+          <option value="BSC BEP20">BNB Smart Chain BEP20 (USDT / USDC / BNB)</option>
+          <option value="Arbitrum">Arbitrum One (USDT / USDC / ETH)</option>
+          <option value="Solana">Solana (USDC / USDT / SOL)</option>
         </select>
       </div>
       <div style="display:flex;align-items:flex-end;">
-        <button class="btn2" style="width:100%;border-color:#38bdf8;color:#7dd3fc;" onclick="runDemoFlow()">{'Simulate Instant Settlement' if not is_es else 'Simular Cobro + Acceso VIP'}</button>
+        <button class="btn2" style="width:100%;border-color:rgba(56,189,248,.45);color:#7dd3fc;" onclick="runDemoFlow()">{'Simulate Instant Settlement' if not is_es else 'Simular Cobro + Acceso VIP'}</button>
       </div>
     </div>
     <div id="demoOutput" style="margin-top:12px;"></div>
-  </div>
-
-  <div class="card" id="b2b" style="margin-top:20px;border-color:#f59e0b;">
-    <span class="badge" style="border-color:#f59e0b;color:#fcd34d;background:rgba(245,158,11,.12);">{'DONE-FOR-YOU B2B INFRASTRUCTURE' if not is_es else 'IMPLEMENTACION B2B LLAVE EN MANO'}</span>
-    <h2 style="margin:10px 0 6px;">{'Want Us to Deploy & Customize Your Payment Infrastructure?' if not is_es else 'Queres que lo dejemos funcionando a medida para tu negocio?'}</h2>
-    <p style="margin:0 0 12px;font-size:.9rem;color:#94a3b8;">{'Built for paid Telegram signal/alpha rooms, SaaS teams blocked by Stripe/Whop, and crypto businesses requiring custom bot/API automation. Pay directly in USDT/USDC with 50% kickoff deposit.' if not is_es else 'Ideal para comunidades VIP de trading/educación, SaaS sin Stripe/Whop o empresas cripto que necesitan bots y automatización Python a medida. Cobro directo en USDT/USDC con seña del 50%.'}</p>
-    <div class="grid" style="margin:12px 0;">
-      <div class="card" style="background:#070b14;border-color:#f59e0b;">
-        <div style="font-weight:800;color:#fcd34d;">{'TURNKEY VIP GATE (24H)' if not is_es else 'VIP GATE LLAVE EN MANO (24H)'}</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$199 <span style="font-size:.85rem;color:#94a3b8;">USDT ({'50% deposit: $99' if not is_es else 'seña 50%: $99'})</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">{PAYGATE_B2B_PACKAGES['turnkey_199']['summary_es' if is_es else 'summary_en']}</p>
-      </div>
-      <div class="card" style="background:#070b14;border-color:#38bdf8;">
-        <div style="font-weight:800;color:#7dd3fc;">{'CUSTOM BOT + API / EXCHANGE' if not is_es else 'BOT A MEDIDA + API / EXCHANGE'}</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$499 <span style="font-size:.85rem;color:#94a3b8;">USDT ({'50% deposit: $249' if not is_es else 'seña 50%: $249'})</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">{PAYGATE_B2B_PACKAGES['custom_499']['summary_es' if is_es else 'summary_en']}</p>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-      <div>
-        <label>{'Solution Package' if not is_es else 'Solución a contratar'}</label>
-        <select id="b2bPkg">
-          <option value="turnkey_199">{'Turnkey VIP Gate Setup — $199 USDT ($99 deposit)' if not is_es else 'VIP Gate Llave en Mano — $199 USDT ($99 seña)'}</option>
-          <option value="custom_499">{'Custom Crypto Bot + Exchange/API — $499 USDT ($249 deposit)' if not is_es else 'Bot Cripto + API/Exchange a Medida — $499 USDT ($249 seña)'}</option>
-        </select>
-      </div>
-      <div>
-        <label>{'Your Name / Brand' if not is_es else 'Tu Nombre / Marca'}</label>
-        <input id="b2bName" placeholder="e.g. Alpha Desk / Studio"/>
-      </div>
-      <div>
-        <label>{'Telegram @handle or Email' if not is_es else 'Tu @usuario Telegram o Email'}</label>
-        <input id="b2bContact" placeholder="@yourhandle or founder@domain.com"/>
-      </div>
-    </div>
-    <label>{'Project URL / Channel & Integration Scope' if not is_es else 'Link o detalle de qué necesitás automatizar'}</label>
-    <textarea id="b2bScope" rows="2" placeholder="{'e.g. 400-member VIP Telegram channel migrating off manual TRC20/Whop + webhook to Notion/CRM' if not is_es else 'Ej: canal VIP de señales cobrando USDT manual, quiero bot + expulsión automática + alertas'}"></textarea>
-    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <button class="btn" style="background:#f59e0b;color:#1f1300;" onclick="createB2BOrder()">{'Request Deployment & Get USDT Invoice' if not is_es else 'Reservar Implementacion y Ver Factura USDT'}</button>
-      <span id="b2bMsg" style="font-size:.9rem;"></span>
-    </div>
-    <div id="b2bOrderBox" style="margin-top:12px;"></div>
-  </div>
-
-  <div class="card" id="upgrade" style="margin-top:18px;">
-    <h2 style="margin:0 0 8px;">{t['up_h']}</h2>
-    <div class="grid" style="margin:12px 0;">
-      <div class="card" style="background:#070b14;">
-        <div style="font-weight:800;color:#94a3b8;">{t['f_t']}</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$0 <span style="font-size:.85rem;color:#94a3b8;">USDT</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">{t['f_b']}</p>
-      </div>
-      <div class="card" style="background:#070b14;border-color:#10b981;">
-        <div style="font-weight:800;color:#10b981;">{t['p_t']}</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$29 <span style="font-size:.85rem;color:#94a3b8;">USDT / mo</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">{t['p_b']}</p>
-      </div>
-      <div class="card" style="background:#070b14;border-color:#38bdf8;">
-        <div style="font-weight:800;color:#38bdf8;">{t['l_t']}</div>
-        <div style="font-size:1.7rem;font-weight:900;margin:4px 0;">$79 <span style="font-size:.85rem;color:#94a3b8;">USDT one-time</span></div>
-        <p style="font-size:.86rem;color:#94a3b8;">{t['l_b']}</p>
-      </div>
-    </div>
-    <div style="background:#070b14;border:1px solid #1e293b;border-radius:10px;padding:14px;font-size:.88rem;">
-      {t['up_box']}
-    </div>
   </div>
 </div>
 <script>
@@ -1594,10 +1736,10 @@ async function crearBot() {{
   msg.className = 'ok';
   msg.textContent = 'Bot live!';
   const panelUrl = location.origin + d.panel_url;
-  out.innerHTML = `<div class="card" style="background:#052e16;border-color:#10b981;">
+  out.innerHTML = `<div class="card" style="background:rgba(5,46,22,.5);border-color:#10b981;">
     <div><strong>@${{d.bot.bot_username}}</strong> is live: <a style="color:#6ee7b7;font-weight:800;" href="https://t.me/${{d.bot.bot_username}}" target="_blank">t.me/${{d.bot.bot_username}}</a></div>
     <div style="margin-top:8px;"><strong>Save your private Admin Panel link:</strong><br/><code>${{panelUrl}}</code></div>
-    <div style="margin-top:8px;"><a class="btn" href="${{panelUrl}}">Open Admin Panel -></a></div>
+    <div style="margin-top:10px;"><a class="btn" href="${{panelUrl}}">Open Admin Panel -&gt;</a></div>
   </div>`;
 }}
 
@@ -1605,10 +1747,10 @@ function runDemoFlow() {{
   const amt = document.getElementById('demoPlan').value;
   const ch = document.getElementById('demoChain').value;
   const out = document.getElementById('demoOutput');
-  out.innerHTML = `<div style="background:#070b14;border:1px solid #38bdf8;border-radius:10px;padding:14px;font-size:.88rem;">
-    <div><strong>Step 1 (Buyer in Telegram):</strong> Sends <code>/start</code> → selects <strong>$${{amt}} USDT</strong> via <strong>${{ch}}</strong>.</div>
-    <div style="margin-top:6px;"><strong>Step 2 (Direct Wallet Settlement):</strong> Buyer transfers $${{amt}} straight to <em>your wallet</em> (0% fee held by PayGate) and pastes TX hash.</div>
-    <div style="margin-top:6px;"><strong>Step 3 (RPC Verified in ~2s):</strong> Anti-replay check passes → Bot issues 1-use invite link <code>t.me/+singleUse7x9K</code> (<code>member_limit=1</code>) + schedules auto-kick on expiry.</div>
+  out.innerHTML = `<div style="background:rgba(2,6,23,.8);border:1px solid rgba(56,189,248,.4);border-radius:12px;padding:14px;font-size:.86rem;">
+    <div><strong>Step 1 (Buyer):</strong> Selects <strong>$${{amt}} USD</strong> via <strong>${{ch}}</strong> and clicks 1-Click Pay in MetaMask or Phantom.</div>
+    <div style="margin-top:6px;"><strong>Step 2 (Direct Settlement):</strong> Funds transfer straight to <em>your self-custody wallet</em> with 0% gateway fee.</div>
+    <div style="margin-top:6px;"><strong>Step 3 (RPC Finality in ~3s):</strong> Anti-replay check passes, signed HMAC-SHA256 webhook fires, and buyer receives instant license key or 1-use VIP invite link.</div>
   </div>`;
 }}
 
@@ -1635,17 +1777,17 @@ async function createB2BOrder() {{
   msg.className = 'ok';
   msg.textContent = 'Order created: ' + d.order.order_id;
   const ord = d.order;
-  box.innerHTML = `<div class="card" style="background:#070b14;border-color:#f59e0b;">
+  box.innerHTML = `<div class="card" style="background:rgba(2,6,23,.85);border-color:#f59e0b;">
     <div><strong>Order ID:</strong> <code>${{ord.order_id}}</code> · <strong>${{ord.package_name}}</strong></div>
     <div style="margin-top:6px;font-size:.88rem;">Send <strong>$${{ord.min_deposit_usd}} USDT/USDC</strong> (50% deposit) or full <strong>$${{ord.full_price_usd}} USDT/USDC</strong>:</div>
-    <div style="margin-top:6px;font-size:.84rem;">• EVM (Polygon / BSC / Arbitrum / Base / ETH): <code>${{d.wallets.evm}}</code></div>
-    <div style="margin-top:4px;font-size:.84rem;">• Solana (SPL USDC/USDT): <code>${{d.wallets.solana}}</code></div>
+    <div style="margin-top:6px;font-size:.82rem;">EVM (Base / Polygon / Arbitrum / BSC / ETH): <code>${{d.wallets.evm}}</code></div>
+    <div style="margin-top:4px;font-size:.82rem;">Solana (SPL USDC/USDT/SOL): <code>${{d.wallets.solana}}</code></div>
     <div style="display:grid;grid-template-columns:160px 1fr auto;gap:8px;margin-top:10px;">
-      <select id="b2bNet"><option value="polygon">Polygon</option><option value="bsc">BSC BEP20</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="solana">Solana</option><option value="ethereum">Ethereum</option></select>
+      <select id="b2bNet"><option value="base">Base</option><option value="polygon">Polygon</option><option value="bsc">BSC BEP20</option><option value="arbitrum">Arbitrum</option><option value="solana">Solana</option><option value="ethereum">Ethereum</option></select>
       <input id="b2bTx" placeholder="Paste TX Hash (0x... or Solana signature)"/>
       <button class="btn" onclick="verifyB2BOrder('${{ord.order_id}}')">Verify Deposit</button>
     </div>
-    <div id="b2bVerifyMsg" style="margin-top:8px;font-size:.88rem;"></div>
+    <div id="b2bVerifyMsg" style="margin-top:8px;font-size:.86rem;"></div>
   </div>`;
 }}
 
@@ -1674,12 +1816,12 @@ async function verifyB2BOrder(orderId) {{
 async function createInstantInvoice() {{
   const m = document.getElementById('invCreateMsg');
   const out = document.getElementById('invCreateOut');
-  m.className = ''; m.textContent = 'Creating invoice...';
+  m.className = ''; m.textContent = 'Creating hosted checkout...';
   const r = await fetch('/api/v1/paygate/invoices', {{
     method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
     body: JSON.stringify({{
       title: document.getElementById('invTitle').value.trim() || 'Digital Service',
-      amount_usd: parseFloat(document.getElementById('invAmt').value || '50'),
+      amount_usd: parseFloat(document.getElementById('invAmt').value || '29'),
       network: document.getElementById('invNet').value,
       merchant_wallet: document.getElementById('invWallet').value.trim(),
       webhook_url: document.getElementById('invHook').value.trim()
@@ -1687,10 +1829,14 @@ async function createInstantInvoice() {{
   }});
   const d = await r.json();
   if (!r.ok) {{ m.className = 'err'; m.textContent = d.detail || 'Error creating invoice.'; return; }}
-  m.className = 'ok'; m.textContent = 'Invoice created!';
-  out.innerHTML = `<div class="card" style="background:#052e16;border-color:#10b981;">
-    <div><strong>Checkout Link Ready:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a></div>
-    <div style="margin-top:6px;font-size:.84rem;">ID: <code>${{d.invoice.invoice_id}}</code></div>
+  m.className = 'ok'; m.textContent = 'Checkout ready!';
+  out.innerHTML = `<div class="card" style="background:rgba(5,46,22,.5);border-color:#10b981;">
+    <div><strong>Hosted Checkout Link Ready:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a></div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <a class="btn" href="${{d.checkout_url}}" target="_blank">Open Live Checkout -&gt;</a>
+      <button class="btn2" onclick="navigator.clipboard.writeText('${{d.checkout_url}}');this.textContent='Copied Link'">Copy Link</button>
+      <span style="font-size:.8rem;color:#94a3b8;">ID: <code>${{d.invoice.invoice_id}}</code></span>
+    </div>
   </div>`;
 }}
 </script></body></html>"""
