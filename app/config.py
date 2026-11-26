@@ -38,10 +38,34 @@ class StudioConfig:
     # Public RPC endpoints for real on-chain verification (no API key required)
     EVM_RPCS: dict[str, str] = {
         "ethereum": os.getenv("ETHEREUM_RPC_URL", "https://ethereum-rpc.publicnode.com"),
-        "base": os.getenv("BASE_RPC_URL", "https://mainnet.base.org"),
+        "base": os.getenv("BASE_RPC_URL", "https://base-rpc.publicnode.com"),
         "arbitrum": os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),
         "polygon": os.getenv("POLYGON_RPC_URL", "https://polygon-bor-rpc.publicnode.com"),
-        "bsc": os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org"),
+        "bsc": os.getenv("BSC_RPC_URL", "https://bsc-rpc.publicnode.com"),
+    }
+    EVM_RPC_FALLBACKS: dict[str, tuple[str, ...]] = {
+        "ethereum": (
+            "https://ethereum-rpc.publicnode.com",
+            "https://rpc.ankr.com/eth",
+        ),
+        "base": (
+            "https://base-rpc.publicnode.com",
+            "https://mainnet.base.org",
+            "https://base.llamarpc.com",
+        ),
+        "arbitrum": (
+            "https://arb1.arbitrum.io/rpc",
+            "https://arbitrum.llamarpc.com",
+        ),
+        "polygon": (
+            "https://polygon-bor-rpc.publicnode.com",
+            "https://polygon-rpc.com",
+        ),
+        "bsc": (
+            "https://bsc-rpc.publicnode.com",
+            "https://bsc-dataseed.binance.org",
+            "https://bsc-dataseed1.defibit.io",
+        ),
     }
     EVM_CHAIN_IDS: dict[str, int] = {
         "ethereum": 1,

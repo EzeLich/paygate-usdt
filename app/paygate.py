@@ -734,6 +734,24 @@ def auto_detect_and_settle_invoice(
             "status_code": 402,
             "error": f"No confirmed Bitcoin payment >= ${float(inv['amount_usd']):.2f} BTC to {wal[:12]}... detected yet. Paste TXID once confirmed.",
         }
+    if primary == "solana" and hasattr(verifier, "find_recent_solana_transfers"):
+        for m in verifier.find_recent_solana_transfers(expected_recipient=wal, min_amount_usd=float(inv["amount_usd"])):
+            if not m.tx_hash or ledger.is_tx_used(m.tx_hash):
+                continue
+            settled = verify_and_settle_invoice(
+                invoice_id=invoice_id,
+                tx_hash=m.tx_hash,
+                ledger=ledger,
+                verifier=verifier,
+                network_override="solana",
+            )
+            if settled.get("ok"):
+                return settled
+        return {
+            "ok": False,
+            "status_code": 402,
+            "error": f"No confirmed Solana payment >= ${float(inv['amount_usd']):.2f} (SOL/USDC/USDT) to {wal[:10]}... detected yet. Wait ~3s or paste signature.",
+        }
     if not wal.startswith("0x") or not hasattr(verifier, "find_recent_evm_transfers"):
         return {
             "ok": False,
@@ -746,7 +764,7 @@ def auto_detect_and_settle_invoice(
             network=net,
             expected_recipient=wal,
             min_amount_usd=float(inv["amount_usd"]),
-            lookback_blocks=400,
+            lookback_blocks=900,
         )
         for m in matches:
             if not m.tx_hash or ledger.is_tx_used(m.tx_hash):
@@ -905,6 +923,13 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             btns.append(f"""<button class="btn2" style="border-color:#a855f7;color:#d8b4fe;" onclick="payNativeWithWallet()">1-Click Pay {est_lbl}{native_sym} (Native)</button>""")
         if btns:
             one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
+    elif not is_paid and net_raw == "solana":
+        est_lbl = f"~{native_est:.5f} " if native_est > 0 else ""
+        one_click_btns = (
+            '<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">'
+            f'<button class="btn" onclick="paySolanaNativeWithWallet()">1-Click Pay {est_lbl}SOL (Phantom / Solflare)</button>'
+            '</div>'
+        )
 
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=136x136&margin=6&data={urllib.parse.quote(wallet)}"
 
@@ -1001,6 +1026,49 @@ const MERCHANT_WALLET = '{wallet}';
 const CENTS_INT = {cents_int};
 const AMOUNT_USD = {amt_f};
 const TARGET_NETWORK = '{net_raw}';
+
+async function paySolanaNativeWithWallet() {{
+  const m = document.getElementById('invMsg');
+  const provider = (window.phantom && window.phantom.solana) || window.solana || window.solflare;
+  if (!provider) {{
+    m.style.color = '#fca5a5';
+    m.textContent = 'No Solana browser wallet detected (Phantom/Solflare). Scan QR or transfer SOL/USDC manually and paste signature.';
+    return;
+  }}
+  try {{
+    m.style.color = '#38bdf8';
+    m.textContent = 'Fetching live SOL spot quote & connecting Solana wallet...';
+    const qr = await fetch('/api/v1/paygate/quote?amount_usd=' + AMOUNT_USD + '&network=solana');
+    const q = await qr.json();
+    if (!qr.ok || !q.lamports || !q.recent_blockhash) {{
+      m.style.color = '#fca5a5';
+      m.textContent = 'Unable to fetch live Solana quote. Send SOL/USDC manually above.';
+      return;
+    }}
+    if (!window.solanaWeb3) {{
+      await new Promise((res, rej) => {{
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.8/lib/index.iife.min.js';
+        s.onload = res; s.onerror = rej; document.head.appendChild(s);
+      }});
+    }}
+    const resp = await provider.connect();
+    const fromPubkey = new window.solanaWeb3.PublicKey((resp && resp.publicKey ? resp.publicKey : provider.publicKey).toString());
+    const toPubkey = new window.solanaWeb3.PublicKey(MERCHANT_WALLET);
+    const tx = new window.solanaWeb3.Transaction({{ recentBlockhash: q.recent_blockhash, feePayer: fromPubkey }});
+    tx.add(window.solanaWeb3.SystemProgram.transfer({{ fromPubkey: fromPubkey, toPubkey: toPubkey, lamports: q.lamports }}));
+    m.textContent = 'Confirm ~' + q.native_amount + ' SOL ($' + AMOUNT_USD.toFixed(2) + ') in Phantom...';
+    const signed = await provider.signAndSendTransaction(tx);
+    const sig = (signed && signed.signature) ? signed.signature : String(signed);
+    document.getElementById('invTx').value = sig;
+    m.style.color = '#34d399';
+    m.textContent = 'Solana TX broadcast (' + sig.slice(0, 14) + '...). Verifying on-chain...';
+    pollVerify();
+  }} catch (err) {{
+    m.style.color = '#fca5a5';
+    m.textContent = (err && err.message) ? err.message : 'Solana wallet payment cancelled.';
+  }}
+}}
 
 async function payNativeWithWallet() {{
   const m = document.getElementById('invMsg');
@@ -1106,7 +1174,7 @@ async function autoDetectInv(silentBg) {{
   if (!m) return false;
   if (!silentBg) {{
     m.style.color = '#38bdf8';
-    m.textContent = 'Scanning recent blocks across Base, Polygon, Arbitrum, BSC & Ethereum for your transfer...';
+    m.textContent = 'Scanning recent blocks across Base, Polygon, Arbitrum, BSC, Ethereum, Solana & Bitcoin for your transfer...';
   }}
   try {{
     const r = await fetch('/api/v1/paygate/invoices/{inv_id}/auto-detect', {{
@@ -1126,7 +1194,7 @@ async function autoDetectInv(silentBg) {{
     return false;
   }}
 }}
-if ({'false' if is_paid else 'true'} && (MERCHANT_WALLET.startsWith('0x') || TARGET_NETWORK === 'bitcoin')) {{
+if ({'false' if is_paid else 'true'} && (MERCHANT_WALLET.startsWith('0x') || TARGET_NETWORK === 'bitcoin' || TARGET_NETWORK === 'solana')) {{
   setInterval(function() {{
     if (!document.hidden) autoDetectInv(true);
   }}, 12000);

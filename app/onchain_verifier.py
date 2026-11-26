@@ -97,6 +97,36 @@ def _rpc_post(url: str, payload: dict[str, Any], timeout_s: float = 10.0) -> dic
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _evm_rpc_urls(network: str) -> list[str]:
+    primary = StudioConfig.EVM_RPCS.get(network, "")
+    fallbacks = getattr(StudioConfig, "EVM_RPC_FALLBACKS", {}).get(network, ())
+    seen: list[str] = []
+    for u in (primary, *fallbacks):
+        if u and u not in seen:
+            seen.append(u)
+    return seen
+
+
+def _evm_rpc_call(network: str, payload: dict[str, Any], timeout_s: float = 7.0) -> dict[str, Any]:
+    urls = _evm_rpc_urls(network)
+    last_exc: Exception | None = None
+    last_resp: dict[str, Any] = {}
+    for url in urls:
+        try:
+            resp = _rpc_post(url, payload, timeout_s=timeout_s)
+            if isinstance(resp, dict) and "error" not in resp:
+                return resp
+            last_resp = resp if isinstance(resp, dict) else {}
+        except Exception as exc:
+            last_exc = exc
+            continue
+    if last_resp:
+        return last_resp
+    if last_exc is not None:
+        raise last_exc
+    return {}
+
+
 def decode_evm_stablecoin_transfer(
     receipt: dict[str, Any],
     network: str,
@@ -555,8 +585,8 @@ class OnChainPaymentVerifier:
         target = (expected_recipient or StudioConfig.PHANTOM_EVM_ADDRESS).strip()
         rpc_url = StudioConfig.EVM_RPCS[network]
         try:
-            resp = _rpc_post(
-                rpc_url,
+            resp = _evm_rpc_call(
+                network,
                 {"jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionReceipt", "params": [tx_hash]},
             )
             receipt = resp.get("result")
@@ -582,8 +612,8 @@ class OnChainPaymentVerifier:
                 return res
             if str(receipt.get("status") or "0x0").lower() == "0x1":
                 try:
-                    tx_resp = _rpc_post(
-                        rpc_url,
+                    tx_resp = _evm_rpc_call(
+                        network,
                         {"jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionByHash", "params": [tx_hash]},
                     )
                     tx_obj = (tx_resp or {}).get("result")
@@ -752,31 +782,83 @@ class OnChainPaymentVerifier:
         except Exception:
             return []
 
+    def find_recent_solana_transfers(
+        self,
+        expected_recipient: str,
+        min_amount_usd: float,
+    ) -> list[VerificationResult]:
+        """Scan recent Solana signatures on expected_recipient (and its USDC/USDT token accounts) for zero-tx-hash settlement."""
+        target = expected_recipient.strip()
+        if not target:
+            return []
+        try:
+            sigs: list[str] = []
+            r_main = _rpc_post(
+                StudioConfig.SOLANA_RPC_URL,
+                {"jsonrpc": "2.0", "id": 1, "method": "getSignaturesForAddress", "params": [target, {"limit": 6}]},
+                timeout_s=6.0,
+            )
+            for item in (r_main.get("result") or []):
+                sig = str((item or {}).get("signature") or "").strip()
+                if sig and not (item or {}).get("err") and sig not in sigs:
+                    sigs.append(sig)
+            for _, (mint_addr, _) in StudioConfig.SOLANA_STABLECOINS.items():
+                ta_resp = _rpc_post(
+                    StudioConfig.SOLANA_RPC_URL,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "getTokenAccountsByOwner",
+                        "params": [target, {"mint": mint_addr}, {"encoding": "jsonParsed"}],
+                    },
+                    timeout_s=5.0,
+                )
+                for acc in ((ta_resp.get("result") or {}).get("value") or [])[:2]:
+                    ata_pk = str((acc or {}).get("pubkey") or "").strip()
+                    if not ata_pk:
+                        continue
+                    r_ata = _rpc_post(
+                        StudioConfig.SOLANA_RPC_URL,
+                        {"jsonrpc": "2.0", "id": 3, "method": "getSignaturesForAddress", "params": [ata_pk, {"limit": 5}]},
+                        timeout_s=5.0,
+                    )
+                    for item in (r_ata.get("result") or []):
+                        sig = str((item or {}).get("signature") or "").strip()
+                        if sig and not (item or {}).get("err") and sig not in sigs:
+                            sigs.append(sig)
+            out: list[VerificationResult] = []
+            for sig in sigs[:8]:
+                vr = self._verify_solana(sig, min_amount_usd, target)
+                if vr.verified:
+                    out.append(vr)
+            return out
+        except Exception:
+            return []
+
     def find_recent_evm_transfers(
         self,
         network: str,
         expected_recipient: str,
         min_amount_usd: float,
-        lookback_blocks: int = 400,
+        lookback_blocks: int = 900,
     ) -> list[VerificationResult]:
         """Scan recent ERC-20 USDT/USDC Transfer logs to expected_recipient so buyers don't need to copy-paste tx_hash."""
         net = network.strip().lower()
         if net not in StudioConfig.EVM_RPCS:
             return []
-        rpc_url = StudioConfig.EVM_RPCS[net]
         contracts = StudioConfig.EVM_STABLECOINS.get(net, {})
         if not contracts:
             return []
         contract_lookup = {addr.lower(): (sym, dec) for sym, (addr, dec) in contracts.items()}
         target_topic = "0x" + expected_recipient.strip().lower().removeprefix("0x").rjust(64, "0")
         try:
-            blk_resp = _rpc_post(rpc_url, {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []})
+            blk_resp = _evm_rpc_call(net, {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []})
             head_block = int(str(blk_resp.get("result") or "0x0"), 16)
             if head_block <= 0:
                 return []
             from_block = hex(max(0, head_block - max(10, int(lookback_blocks))))
-            logs_resp = _rpc_post(
-                rpc_url,
+            logs_resp = _evm_rpc_call(
+                net,
                 {
                     "jsonrpc": "2.0",
                     "id": 2,
