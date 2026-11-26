@@ -1020,6 +1020,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
           <div class="hint" style="margin-top:6px;">Watchdog ID: <code>{html.escape(str(activated_wd.get('watch_id') or ''))}</code> · Status: <strong style="color:#34d399;">ACTIVE</strong></div>
           <div class="hint" style="margin-top:4px;">Target: <code>{html.escape(str(activated_wd.get('target_value') or ''))}</code> ({html.escape(str(activated_wd.get('target_type') or ''))} · {html.escape(str(activated_wd.get('network') or 'base')).upper()})</div>
           <div class="hint" style="margin-top:4px;">Alert Webhook: <code>{html.escape(str(activated_wd.get('webhook_url') or ''))}</code></div>
+          <div style="margin-top:10px;"><a class="btn-secondary btn-sky" href="{base}/watchdog/{html.escape(str(activated_wd.get('watch_id') or ''))}">Open Live 24/7 Watchdog Dashboard &amp; Test Alert -&gt;</a></div>
         </div>"""
         if isinstance(activated_wd, dict) and activated_wd.get("watch_id")
         else ""
