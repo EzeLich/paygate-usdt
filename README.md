@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
 [![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzequielLech%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzequielLech)
-[![PayGate USDT MCP server](https://glama.ai/mcp/servers/EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/servers/EzeLich/paygate-usdt)
-[![PayGate USDT MCP connector](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/connectors/io.github.EzeLich/paygate-usdt)
+[![PayGate USDT MCP server](https://glama.ai/mcp/servers/EzequielLech/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/servers/EzequielLech/paygate-usdt)
+[![PayGate USDT MCP connector](https://glama.ai/mcp/connectors/io.github.EzequielLech/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/connectors/io.github.EzequielLech/paygate-usdt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://python.org)
 [![Node.js 18+ TypeScript](https://img.shields.io/badge/Node.js-18%2B%20TypeScript%20SDK-339933.svg)](sdk-js/index.d.ts)
