@@ -17,6 +17,7 @@
 No custodial processor holds your funds. No Stripe / Whop / bank account requirements. **0% platform cut on settlements.** Includes **1-Click MetaMask & Phantom Checkout** (`USDT`, `USDC`, plus native `ETH`, `BNB`, `POL`, `SOL`, and `Bitcoin Taproot bc1p...`), **Zero-Tx-Hash On-Chain Payment Auto-Detection**, and a **Self-Serve Merchant Revenue Dashboard (`/paygate/merchant`)**.
 
 - **Generate a Free Live Checkout Link in 5s (First 3 Sales Free):** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
+- **Official 1-Click GitHub Starter Template (`Use this template`):** [EzequielLech/x402-mcp-paywall-starter](https://github.com/EzequielLech/x402-mcp-paywall-starter)
 - **Instant Managed Plans (1-Click On-Chain Activation):**
   - [Cloud Pro ($9/mo — Unlimited Hosted Invoices + 1,000 Pro API Calls) ->](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=9&network=base&title=PayGate+Cloud+Pro+30d&issue_pass=1&billing_days=30)
   - [Lifetime White-Label License ($79 One-Time — Unlimited Forever + 25,000 Master Calls) ->](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=79&network=base&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650)
