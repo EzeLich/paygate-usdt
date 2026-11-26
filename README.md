@@ -1,4 +1,4 @@
-# PayGate USDT v2.7 — Non-Custodial Crypto & Stablecoin Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), Python & TypeScript SDKs & MCP Server
+# PayGate USDT v2.8 — Non-Custodial Crypto & Stablecoin Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), Python & TypeScript SDKs & MCP Server
 
 [![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
 [![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzequielLech%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzequielLech)

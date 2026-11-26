@@ -778,10 +778,35 @@ def auto_detect_and_settle_invoice(
             )
             if settled.get("ok"):
                 return settled
+    if hasattr(verifier, "find_recent_eth_native_transfers"):
+        min_ts = 0.0
+        try:
+            c_dt = datetime.fromisoformat(str(inv.get("created_at") or "").replace("Z", "+00:00"))
+            if c_dt.tzinfo is None:
+                c_dt = c_dt.replace(tzinfo=timezone.utc)
+            min_ts = c_dt.timestamp() - 600.0
+        except Exception:
+            min_ts = datetime.now(timezone.utc).timestamp() - 3600.0
+        for m in verifier.find_recent_eth_native_transfers(
+            expected_recipient=wal,
+            min_amount_usd=float(inv["amount_usd"]),
+            min_timestamp_unix=min_ts,
+        ):
+            if not m.tx_hash or ledger.is_tx_used(m.tx_hash):
+                continue
+            settled = verify_and_settle_invoice(
+                invoice_id=invoice_id,
+                tx_hash=m.tx_hash,
+                ledger=ledger,
+                verifier=verifier,
+                network_override="ethereum",
+            )
+            if settled.get("ok"):
+                return settled
     return {
         "ok": False,
         "status_code": 402,
-        "error": f"No unredeemed transfer >= ${float(inv['amount_usd']):.2f} USDT/USDC to {wal[:10]}... detected in recent blocks yet. Wait ~5s after confirmation or paste TX hash.",
+        "error": f"No unredeemed transfer >= ${float(inv['amount_usd']):.2f} USDT/USDC/ETH to {wal[:10]}... detected in recent blocks yet. Wait ~5s after confirmation or paste TX hash.",
     }
 
 

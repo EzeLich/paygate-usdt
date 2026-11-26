@@ -912,3 +912,63 @@ class OnChainPaymentVerifier:
         except Exception:
             return []
 
+    def find_recent_eth_native_transfers(
+        self,
+        expected_recipient: str,
+        min_amount_usd: float,
+        min_timestamp_unix: float = 0.0,
+    ) -> list[VerificationResult]:
+        """Scan recent confirmed Ethereum native ETH transfers to expected_recipient via public Blockscout v2 API."""
+        target = expected_recipient.strip()
+        if not target.startswith("0x"):
+            return []
+        try:
+            spot_eth = fetch_native_usd_price("ethereum")
+            if spot_eth <= 0:
+                return []
+            data = _http_get_json(f"https://eth.blockscout.com/api/v2/addresses/{target}/transactions?filter=to", timeout_s=5.0)
+            items = (data or {}).get("items") or []
+            out: list[VerificationResult] = []
+            for tx in items[:8]:
+                if str(tx.get("status") or "").lower() != "ok":
+                    continue
+                if min_timestamp_unix > 0:
+                    ts_raw = str(tx.get("timestamp") or "").strip()
+                    if not ts_raw:
+                        continue
+                    try:
+                        from datetime import datetime, timezone as _tz
+                        dt = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=_tz.utc)
+                        if dt.timestamp() < min_timestamp_unix:
+                            continue
+                    except Exception:
+                        continue
+                tx_hash = str(tx.get("hash") or "").strip()
+                to_hash = str((tx.get("to") or {}).get("hash") or "").strip().lower()
+                if not tx_hash or to_hash != target.lower():
+                    continue
+                wei = int(str(tx.get("value") or "0"))
+                if wei <= 0:
+                    continue
+                eth_amt = wei / 1e18
+                usd_val = eth_amt * spot_eth
+                if usd_val + 1e-6 >= float(min_amount_usd) * 0.98:
+                    out.append(
+                        VerificationResult(
+                            verified=True,
+                            network="ethereum",
+                            token="ETH",
+                            amount_usd=round(usd_val, 4),
+                            recipient=target,
+                            sender=str((tx.get("from") or {}).get("hash") or ""),
+                            tx_hash=tx_hash,
+                            reason=f"Auto-detected native {eth_amt:.6f} ETH (~${usd_val:.2f}) transfer on ethereum.",
+                            raw_proof={"block_number": tx.get("block_number"), "native_amount": eth_amt, "auto_detected": True},
+                        )
+                    )
+            return out
+        except Exception:
+            return []
+
