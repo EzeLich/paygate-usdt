@@ -690,6 +690,29 @@ def verify_and_settle_invoice(
             meta["issue_pass"] = True
             meta["api_pass"] = pass_obj
             meta_changed = True
+        audit_id_meta = str(meta.get("audit_id") or "").strip()
+        if is_studio_merchant and audit_id_meta and paid_val >= 18.9 and hasattr(ledger, "mark_audit_paid"):
+            audit_tier = "agency_bundle" if paid_val >= 99.0 else ("fix_kit" if paid_val >= 48.0 else "pro_audit")
+            ledger.mark_audit_paid(audit_id=audit_id_meta, tier=audit_tier, tx_hash=tx)
+            meta["unlocked_audit_id"] = audit_id_meta
+            meta_changed = True
+        wd_spec = meta.get("watchdog_spec")
+        if is_studio_merchant and isinstance(wd_spec, dict) and paid_val >= 8.9 and hasattr(ledger, "create_watchdog"):
+            t_type = str(wd_spec.get("target_type") or "").strip()
+            t_val = str(wd_spec.get("target_value") or "").strip()
+            t_net = str(wd_spec.get("network") or "base").strip().lower()
+            t_hook = str(wd_spec.get("webhook_url") or "").strip()
+            if t_type and t_val and t_hook:
+                wd_obj = ledger.create_watchdog(
+                    target_type=t_type,
+                    target_value=t_val,
+                    network=t_net,
+                    webhook_url=t_hook,
+                    tx_hash=tx,
+                    baseline_hash="",
+                )
+                meta["activated_watchdog"] = wd_obj
+                meta_changed = True
         if meta_changed:
             updated = ledger.update_paygate_invoice_metadata(updated["invoice_id"], meta) or updated
         dispatch_invoice_webhook(updated)
@@ -975,6 +998,33 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
         else ("USDT / USDC" + (f" or ~{native_est:.6f} {native_sym}" if (native_sym and native_est > 0) else (f" or {native_sym}" if native_sym else "")))
     )
 
+    meta_inv = invoice.get("metadata") or {}
+    unlocked_aid = html.escape(str(meta_inv.get("unlocked_audit_id") or ""))
+    activated_wd = meta_inv.get("activated_watchdog") or {}
+    paid_badge_html = (
+        f"""<div class="key-box" style="border-color:rgba(16,185,129,.5);">
+          <div class="kicker" style="color:#34d399;">ON-CHAIN VERIFIED TRUST BADGE UNLOCKED · AUDIT {unlocked_aid}</div>
+          <div style="margin:10px 0;"><img src="{base}/api/v1/badge/{unlocked_aid}.svg" alt="ChainGuard Verified Badge" style="height:24px;display:block;"/></div>
+          <div class="copy-row">
+            <code class="mono-box">[![ChainGuard Verified]({base}/api/v1/badge/{unlocked_aid}.svg)]({base}/certificate/{unlocked_aid})</code>
+            <button class="btn-secondary" onclick="navigator.clipboard.writeText('[![ChainGuard Verified]({base}/api/v1/badge/{unlocked_aid}.svg)]({base}/certificate/{unlocked_aid})');this.textContent='Copied'">Copy Badge MD</button>
+          </div>
+          <div style="margin-top:10px;"><a class="btn-primary" href="{base}/certificate/{unlocked_aid}">Open Verified Certificate &amp; Patches -&gt;</a></div>
+        </div>"""
+        if unlocked_aid
+        else ""
+    )
+    paid_wd_html = (
+        f"""<div class="key-box" style="border-color:rgba(56,189,248,.5);">
+          <div class="kicker" style="color:#38bdf8;">24/7 AUTOMATED SECURITY WATCHDOG ACTIVE</div>
+          <div class="hint" style="margin-top:6px;">Watchdog ID: <code>{html.escape(str(activated_wd.get('watch_id') or ''))}</code> · Status: <strong style="color:#34d399;">ACTIVE</strong></div>
+          <div class="hint" style="margin-top:4px;">Target: <code>{html.escape(str(activated_wd.get('target_value') or ''))}</code> ({html.escape(str(activated_wd.get('target_type') or ''))} · {html.escape(str(activated_wd.get('network') or 'base')).upper()})</div>
+          <div class="hint" style="margin-top:4px;">Alert Webhook: <code>{html.escape(str(activated_wd.get('webhook_url') or ''))}</code></div>
+        </div>"""
+        if isinstance(activated_wd, dict) and activated_wd.get("watch_id")
+        else ""
+    )
+
     paid_block = (
         f"""<div class="glass-card confirmed-card">
           <div class="confirmed-head">
@@ -982,6 +1032,8 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             <span>Payment Confirmed On-Chain</span>
           </div>
           <div class="hint" style="margin-top:8px;">Settled TX Hash: <code>{tx_esc}</code></div>
+          {paid_badge_html}
+          {paid_wd_html}
           {paid_key_html}
           <div class="pill-row" style="margin-top:16px;">
             <a class="btn-secondary" href="{receipt_url}">View Verifiable SHA-256 Receipt</a>
