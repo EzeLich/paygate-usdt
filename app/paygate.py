@@ -891,7 +891,7 @@ def _wallet_payment_uri(invoice: dict[str, Any], native_amount: float = 0.0) -> 
     return f"ethereum:{tok_addr}@{chain_id}/transfer?address={wal}&uint256={units}"
 
 
-def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
+def render_paygate_invoice_html(base: str, invoice: dict[str, Any], *, white_label: bool = False) -> str:
     inv_id = html.escape(invoice["invoice_id"])
     title = html.escape(invoice["title"])
     net_raw = str(invoice["network"]).lower()
@@ -1182,7 +1182,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
   .footer{{margin-top:26px;text-align:center;font-size:.78rem;color:#64748b}}
   .footer a{{color:#94a3b8;text-decoration:none;font-weight:600}} .footer a:hover{{color:#38bdf8}}
 </style></head><body>
-<header class="topbar">
+{"" if white_label else f'''<header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="{base}/paygate"><span class="brand-mark">PG</span><span>PayGate USDT</span></a>
     <nav class="nav-links">
@@ -1192,7 +1192,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
       <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank">GitHub SDK</a>
     </nav>
   </div>
-</header>
+</header>'''}
 <div class="wrap">
   <div class="hero-strip">
     <div>
@@ -1207,7 +1207,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
   </div>
   {paid_block}
   <div class="footer">
-    Non-custodial settlement powered by <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate">Launch your own 0% crypto checkout</a>
+    {"Direct Non-Custodial On-Chain Checkout · Verifiable SHA-256 Settlement Receipt" if white_label else f'Non-custodial settlement powered by <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate">Launch your own 0% crypto checkout</a> · <a href="{base}/paygate#upgrade">Remove branding ($79 White-Label)</a>'}
   </div>
 </div>
 <script>
@@ -1432,16 +1432,36 @@ def render_paygate_receipt_html(base: str, invoice: dict[str, Any]) -> str:
 def render_paygate_widget_js(base: str) -> str:
     safe_base = base.rstrip("/")
     return f"""(function(){{
+  function openPayGateModal(href){{
+    var old=document.getElementById('paygate-modal-overlay');
+    if(old)old.remove();
+    var ov=document.createElement('div');
+    ov.id='paygate-modal-overlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:999999;background:rgba(3,7,18,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var box=document.createElement('div');
+    box.style.cssText='position:relative;width:100%;max-width:960px;height:min(88vh,760px);background:#050811;border:1px solid rgba(148,163,184,.25);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.65);';
+    var bar=document.createElement('div');
+    bar.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#0b1222;border-bottom:1px solid rgba(148,163,184,.18);font-family:Inter,system-ui,sans-serif;font-size:13px;color:#cbd5e1;';
+    bar.innerHTML='<span>Secure Non-Custodial Crypto Checkout</span><div style="display:flex;gap:12px;align-items:center;"><a href="'+href+'" target="_blank" style="color:#38bdf8;text-decoration:none;font-weight:600;">Open in Full Tab -&gt;</a><button id="pg-close-btn" style="background:#1e293b;color:#fff;border:1px solid #334155;border-radius:7px;padding:4px 10px;cursor:pointer;font-weight:700;">Close</button></div>';
+    var ifr=document.createElement('iframe');
+    ifr.src=href;
+    ifr.style.cssText='flex:1;width:100%;border:0;background:#050811;';
+    box.appendChild(bar);box.appendChild(ifr);ov.appendChild(box);document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){{if(e.target===ov)ov.remove();}});
+    document.getElementById('pg-close-btn').addEventListener('click',function(){{ov.remove();}});
+  }}
+  window.PayGateCheckout={{open:openPayGateModal}};
   var nodes=document.querySelectorAll('[data-paygate-merchant]');
   nodes.forEach(function(el){{
     var m=el.getAttribute('data-paygate-merchant')||'';
     var a=el.getAttribute('data-paygate-amount')||'29';
-    var n=el.getAttribute('data-paygate-network')||'polygon';
+    var n=el.getAttribute('data-paygate-network')||'base';
     var t=el.getAttribute('data-paygate-title')||'Instant Payment';
     var p=el.getAttribute('data-paygate-pass')||'0';
+    var modal=el.getAttribute('data-paygate-modal');
     var href='{safe_base}/paygate/pay?merchant='+encodeURIComponent(m)+'&amount='+encodeURIComponent(a)+'&network='+encodeURIComponent(n)+'&title='+encodeURIComponent(t)+'&issue_pass='+encodeURIComponent(p);
-    if(el.tagName==='A'){{el.href=href;el.target='_blank';}}
-    else{{el.style.cursor='pointer';el.addEventListener('click',function(){{window.open(href,'_blank');}});}}
+    if(el.tagName==='A'&&modal!=='1'){{el.href=href;el.target='_blank';}}
+    else{{el.style.cursor='pointer';el.addEventListener('click',function(ev){{ev.preventDefault();if(modal==='0')window.open(href,'_blank');else openPayGateModal(href);}});}}
     if(!el.textContent.trim()){{el.textContent='Pay $'+a+' USDT ('+n.toUpperCase()+')';}}
   }});
 }})();

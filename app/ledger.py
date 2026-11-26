@@ -433,13 +433,24 @@ class StudioLedger:
             rows = conn.execute("SELECT * FROM watchdogs ORDER BY created_at DESC LIMIT 50").fetchall()
         return [dict(r) for r in rows]
 
-    def update_watchdog_status(self, watch_id: str, status: str) -> None:
+    def get_watchdog(self, watch_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM watchdogs WHERE watch_id = ?", (watch_id.strip(),)).fetchone()
+        return dict(row) if row else None
+
+    def update_watchdog_status(self, watch_id: str, status: str, baseline_hash: str | None = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE watchdogs SET last_status = ?, last_checked = ? WHERE watch_id = ?",
-                (status, now, watch_id),
-            )
+            if baseline_hash is not None:
+                conn.execute(
+                    "UPDATE watchdogs SET last_status = ?, last_checked = ?, baseline_hash = ? WHERE watch_id = ?",
+                    (status, now, baseline_hash, watch_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE watchdogs SET last_status = ?, last_checked = ? WHERE watch_id = ?",
+                    (status, now, watch_id),
+                )
 
     def create_whitelabel_project(
         self,
@@ -1133,6 +1144,27 @@ class StudioLedger:
                 if (dt + timedelta(days=b_days)) > now_dt:
                     return True
             except Exception:
+                return True
+        return False
+
+    def has_whitelabel_license(self, wallet: str) -> bool:
+        clean = (wallet or "").strip().lower()
+        if not clean:
+            return False
+        with self._connect() as conn:
+            inv_rows = conn.execute(
+                """
+                SELECT paid_amount_usd, payer, metadata_json
+                FROM paygate_invoices
+                WHERE status = 'paid' AND paid_amount_usd >= 78.0
+                ORDER BY created_at DESC LIMIT 200
+                """
+            ).fetchall()
+        for r in inv_rows:
+            payer = str(r["payer"] or "").strip().lower()
+            meta = json.loads(r["metadata_json"] or "{}")
+            cref = str(meta.get("customer_ref") or "").strip().lower()
+            if payer == clean or cref == clean:
                 return True
         return False
 
