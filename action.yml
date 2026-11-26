@@ -1,0 +1,113 @@
+name: "PayGate x402 & Crypto Checkout Gate"
+description: "Validate x402 v2 payment manifests and generate 0%-fee 7-chain USDT/USDC checkout links in CI."
+branding:
+  icon: "credit-card"
+  color: "green"
+
+inputs:
+  manifest-path:
+    description: "Optional path to an x402 manifest JSON file (e.g. .well-known/x402.json) to validate"
+    required: false
+    default: ""
+  merchant-wallet:
+    description: "Optional 0x, Solana, or Bitcoin payout wallet to generate a live 0%-fee checkout link"
+    required: false
+    default: ""
+  amount-usd:
+    description: "Optional invoice amount in USD for generated checkout link"
+    required: false
+    default: "29"
+  network:
+    description: "Default settlement network (base, polygon, arbitrum, bsc, ethereum, solana, bitcoin)"
+    required: false
+    default: "base"
+  title:
+    description: "Product or sponsor tier title for generated checkout link"
+    required: false
+    default: "Project License & Support"
+
+outputs:
+  valid:
+    description: "Whether the x402 manifest passed validation (true/false)"
+    value: ${{ steps.paygate.outputs.valid }}
+  checkout-url:
+    description: "Generated non-custodial PayGate checkout URL"
+    value: ${{ steps.paygate.outputs.checkout_url }}
+  badge-markdown:
+    description: "Ready-to-paste README Markdown badge for non-custodial crypto checkout"
+    value: ${{ steps.paygate.outputs.badge_markdown }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate x402 manifest & build PayGate checkout
+      id: paygate
+      shell: bash
+      env:
+        PG_MANIFEST: ${{ inputs.manifest-path }}
+        PG_WALLET: ${{ inputs.merchant-wallet }}
+        PG_AMOUNT: ${{ inputs.amount-usd }}
+        PG_NET: ${{ inputs.network }}
+        PG_TITLE: ${{ inputs.title }}
+      run: |
+        python3 - << 'PY'
+        import json, os, sys, urllib.parse
+
+        manifest = os.environ.get("PG_MANIFEST", "").strip()
+        wallet = os.environ.get("PG_WALLET", "").strip()
+        amount = os.environ.get("PG_AMOUNT", "29").strip()
+        net = os.environ.get("PG_NET", "base").strip().lower()
+        title = os.environ.get("PG_TITLE", "Project License & Support").strip()
+        valid = True
+        errors = []
+
+        if manifest:
+            if not os.path.isfile(manifest):
+                valid = False
+                errors.append(f"Manifest file not found: {manifest}")
+            else:
+                try:
+                    data = json.load(open(manifest, "r", encoding="utf-8"))
+                    if not isinstance(data, dict):
+                        valid = False
+                        errors.append("Root x402 manifest must be a JSON object.")
+                except Exception as exc:
+                    valid = False
+                    errors.append(f"Invalid JSON in {manifest}: {exc}")
+
+        checkout_url = ""
+        badge_md = ""
+        if wallet:
+            q = urllib.parse.urlencode({"merchant": wallet, "amount": amount, "network": net, "title": title})
+            checkout_url = f"https://chainguard-studio-production.up.railway.app/paygate/pay?{q}"
+            badge_md = f"[![Pay ${amount} USDT/USDC](https://img.shields.io/badge/PayGate-${urllib.parse.quote(amount)}%20USDT%2FUSDC-10b981)]({checkout_url})"
+
+        out_path = os.environ.get("GITHUB_OUTPUT", "")
+        if out_path:
+            with open(out_path, "a", encoding="utf-8") as fh:
+                fh.write(f"valid={'true' if valid else 'false'}\n")
+                fh.write(f"checkout_url={checkout_url}\n")
+                fh.write(f"badge_markdown={badge_md}\n")
+
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+        lines = [
+            "## PayGate x402 & Non-Custodial Checkout Gate",
+            "",
+            f"- **x402 Manifest Valid:** `{valid}`",
+        ]
+        if checkout_url:
+            lines.append(f"- **Live 7-Chain Checkout URL:** [{checkout_url}]({checkout_url})")
+            lines.append(f"- **README Badge Markdown:** `{badge_md}`")
+        for err in errors:
+            lines.append(f"- **Error:** {err}")
+        lines.extend([
+            "",
+            "Powered by [PayGate USDT](https://chainguard-studio-production.up.railway.app/paygate) — 0% fee non-custodial crypto checkout, x402 paywalls & Cloud Pro (`$9/mo` or `$79` Lifetime White-Label).",
+        ])
+        if summary_path:
+            with open(summary_path, "a", encoding="utf-8") as fh:
+                fh.write("\n".join(lines) + "\n")
+        print("\n".join(lines))
+        if not valid:
+            sys.exit(2)
+        PY

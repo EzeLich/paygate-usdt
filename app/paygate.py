@@ -1009,7 +1009,10 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             <code class="mono-box">[![ChainGuard Verified]({base}/api/v1/badge/{unlocked_aid}.svg)]({base}/certificate/{unlocked_aid})</code>
             <button class="btn-secondary" onclick="navigator.clipboard.writeText('[![ChainGuard Verified]({base}/api/v1/badge/{unlocked_aid}.svg)]({base}/certificate/{unlocked_aid})');this.textContent='Copied'">Copy Badge MD</button>
           </div>
-          <div style="margin-top:10px;"><a class="btn-primary" href="{base}/certificate/{unlocked_aid}">Open Verified Certificate &amp; Patches -&gt;</a></div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <a class="btn-primary" href="{base}/certificate/{unlocked_aid}">Open Verified Certificate -&gt;</a>
+            <a class="btn-secondary btn-sky" href="{base}/api/v1/audits/{unlocked_aid}/remediation-bundle.md" download="ChainGuard-Audit-{unlocked_aid}.md">Download Remediation Dossier (.md)</a>
+          </div>
         </div>"""
         if unlocked_aid
         else ""
