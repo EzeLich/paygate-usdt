@@ -1071,6 +1071,71 @@ class StudioLedger:
         out["metadata"] = json.loads(out.pop("metadata_json") or "{}")
         return out
 
+    def count_paid_invoices_for_merchant(self, merchant_wallet: str) -> int:
+        clean = merchant_wallet.strip()
+        if not clean:
+            return 0
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM paygate_invoices WHERE status = 'paid' AND lower(merchant_wallet) = lower(?)",
+                (clean,),
+            ).fetchone()
+        return int(row[0] or 0)
+
+    def has_active_merchant_license(self, merchant_wallet: str) -> bool:
+        clean = merchant_wallet.strip().lower()
+        if not clean:
+            return False
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        with self._connect() as conn:
+            pass_row = conn.execute(
+                """
+                SELECT 1 FROM api_passes
+                WHERE lower(owner_wallet) = ?
+                  AND expires_at > ?
+                  AND calls_remaining > 0
+                  AND plan_id IN (
+                    'pro_pass', 'agency_bundle', 'paygate_pro_30d_pass',
+                    'paygate_hosted_pro_90d', 'paygate_lifetime_whitelabel_license'
+                  )
+                LIMIT 1
+                """,
+                (clean, now_iso),
+            ).fetchone()
+            if pass_row:
+                return True
+            inv_rows = conn.execute(
+                """
+                SELECT paid_amount_usd, paid_at, created_at, payer, metadata_json
+                FROM paygate_invoices
+                WHERE status = 'paid' AND paid_amount_usd >= 8.5
+                ORDER BY created_at DESC LIMIT 200
+                """
+            ).fetchall()
+        for r in inv_rows:
+            payer = str(r["payer"] or "").strip().lower()
+            meta = json.loads(r["metadata_json"] or "{}")
+            cref = str(meta.get("customer_ref") or "").strip().lower()
+            if payer != clean and cref != clean:
+                continue
+            sub_exp = str(meta.get("subscription_expires_at") or "").strip()
+            if sub_exp:
+                if sub_exp > now_iso:
+                    return True
+                continue
+            b_days = max(30, int(meta.get("billing_days") or 30))
+            anchor = str(r["paid_at"] or r["created_at"] or "")
+            try:
+                dt = datetime.fromisoformat(anchor.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if (dt + timedelta(days=b_days)) > now_dt:
+                    return True
+            except Exception:
+                return True
+        return False
+
     def list_paygate_invoices(
         self,
         *,

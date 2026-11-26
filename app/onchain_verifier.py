@@ -6,6 +6,7 @@ SPL USDC/USDT transfers on Solana directly via public JSON-RPC endpoints.
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -17,6 +18,58 @@ from .config import StudioConfig
 ERC20_TRANSFER_TOPIC = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 )
+
+NATIVE_ASSET_SPECS: dict[str, tuple[str, str]] = {
+    "ethereum": ("ETH", "coingecko:ethereum"),
+    "base": ("ETH", "coingecko:ethereum"),
+    "arbitrum": ("ETH", "coingecko:ethereum"),
+    "bsc": ("BNB", "coingecko:binancecoin"),
+    "polygon": ("POL", "coingecko:polygon-ecosystem-token"),
+    "solana": ("SOL", "coingecko:solana"),
+    "bitcoin": ("BTC", "coingecko:bitcoin"),
+}
+
+_SPOT_PRICE_CACHE: dict[str, tuple[float, float]] = {}
+
+
+def _http_get_json(url: str, timeout_s: float = 5.0) -> Any:
+    req = urllib.request.Request(url, headers={"User-Agent": "chainguard-studio/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def fetch_native_usd_price(network: str) -> float:
+    """Fetch cached live USD spot price for the network native gas/L1 asset."""
+    net = (network or "").strip().lower()
+    spec = NATIVE_ASSET_SPECS.get(net)
+    if not spec:
+        return 0.0
+    sym, llama_id = spec
+    now = time.time()
+    cached = _SPOT_PRICE_CACHE.get(llama_id)
+    if cached and (now - cached[1]) < 60.0 and cached[0] > 0:
+        return cached[0]
+    try:
+        ids = ",".join(sorted({v[1] for v in NATIVE_ASSET_SPECS.values()}))
+        data = _http_get_json(f"https://coins.llama.fi/prices/current/{ids}", timeout_s=5.0)
+        coins = (data or {}).get("coins") or {}
+        for _, v_id in NATIVE_ASSET_SPECS.values():
+            px = float((coins.get(v_id) or {}).get("price") or 0.0)
+            if px > 0:
+                _SPOT_PRICE_CACHE[v_id] = (px, now)
+        if llama_id in _SPOT_PRICE_CACHE:
+            return _SPOT_PRICE_CACHE[llama_id][0]
+    except Exception:
+        pass
+    try:
+        cb = _http_get_json(f"https://api.coinbase.com/v2/prices/{sym}-USD/spot", timeout_s=4.0)
+        px = float(((cb or {}).get("data") or {}).get("amount") or 0.0)
+        if px > 0:
+            _SPOT_PRICE_CACHE[llama_id] = (px, now)
+            return px
+    except Exception:
+        pass
+    return 0.0
 
 
 @dataclass
@@ -203,6 +256,249 @@ def decode_solana_stablecoin_transfer(
     )
 
 
+def decode_evm_native_transfer(
+    tx_obj: dict[str, Any],
+    receipt: dict[str, Any],
+    network: str,
+    expected_recipient: str,
+    min_amount_usd: float,
+    spot_price_usd: float,
+) -> VerificationResult:
+    """Deterministic decoder for native ETH/BNB/POL transfers using confirmed receipt + tx value."""
+    tx_hash = str(receipt.get("transactionHash") or tx_obj.get("hash") or "")
+    sym = (NATIVE_ASSET_SPECS.get(network) or ("NATIVE", ""))[0]
+    if str(receipt.get("status") or "0x0").lower() != "0x1":
+        return VerificationResult(
+            verified=False,
+            network=network,
+            token=sym,
+            amount_usd=0.0,
+            recipient=expected_recipient,
+            sender="",
+            tx_hash=tx_hash,
+            reason="Native transaction failed or not confirmed (status != 0x1).",
+            raw_proof={},
+        )
+    tx_to = str(tx_obj.get("to") or "").strip().lower()
+    if tx_to != expected_recipient.strip().lower():
+        return VerificationResult(
+            verified=False,
+            network=network,
+            token="",
+            amount_usd=0.0,
+            recipient=expected_recipient,
+            sender=str(tx_obj.get("from") or ""),
+            tx_hash=tx_hash,
+            reason=f"Native tx recipient {tx_to} does not match {expected_recipient}.",
+            raw_proof={},
+        )
+    wei = int(str(tx_obj.get("value") or "0x0"), 16)
+    native_amt = wei / 1e18
+    sender = str(tx_obj.get("from") or "")
+    if native_amt <= 0 or spot_price_usd <= 0:
+        return VerificationResult(
+            verified=False,
+            network=network,
+            token=sym,
+            amount_usd=0.0,
+            recipient=expected_recipient,
+            sender=sender,
+            tx_hash=tx_hash,
+            reason=f"Zero {sym} value or unavailable live USD quote.",
+            raw_proof={},
+        )
+    amount_usd = native_amt * float(spot_price_usd)
+    # 2% tolerance protects genuine buyers from brief spot jitter while clicking MetaMask
+    if amount_usd + 1e-6 >= float(min_amount_usd) * 0.98:
+        return VerificationResult(
+            verified=True,
+            network=network,
+            token=sym,
+            amount_usd=round(max(amount_usd, float(min_amount_usd)) if amount_usd >= float(min_amount_usd) * 0.98 else amount_usd, 4),
+            recipient=expected_recipient,
+            sender=sender,
+            tx_hash=tx_hash,
+            reason=f"Verified on-chain native {native_amt:.6f} {sym} (~${amount_usd:.2f}) transfer on {network}.",
+            raw_proof={
+                "blockNumber": receipt.get("blockNumber"),
+                "token": sym,
+                "native_amount": native_amt,
+                "spot_price_usd": spot_price_usd,
+                "amount_usd": amount_usd,
+            },
+        )
+    return VerificationResult(
+        verified=False,
+        network=network,
+        token=sym,
+        amount_usd=round(amount_usd, 4),
+        recipient=expected_recipient,
+        sender=sender,
+        tx_hash=tx_hash,
+        reason=f"Native transfer value ~${amount_usd:.2f} {sym} is below required ${min_amount_usd:.2f}.",
+        raw_proof={"native_amount": native_amt, "amount_usd": amount_usd, "required_usd": min_amount_usd},
+    )
+
+
+def decode_solana_native_transfer(
+    tx_result: dict[str, Any],
+    expected_recipient: str,
+    min_amount_usd: float,
+    tx_sig: str,
+    spot_price_usd: float,
+) -> VerificationResult:
+    """Deterministic decoder for native SOL balance delta in Solana getTransaction."""
+    meta = tx_result.get("meta") or {}
+    if meta.get("err") is not None:
+        return VerificationResult(
+            verified=False,
+            network="solana",
+            token="SOL",
+            amount_usd=0.0,
+            recipient=expected_recipient,
+            sender="",
+            tx_hash=tx_sig,
+            reason=f"Solana transaction failed: {meta.get('err')}",
+            raw_proof={"err": meta.get("err")},
+        )
+    acct_keys = ((tx_result.get("transaction") or {}).get("message") or {}).get("accountKeys") or []
+    pre_bals = meta.get("preBalances") or []
+    post_bals = meta.get("postBalances") or []
+    target_idx = -1
+    for i, item in enumerate(acct_keys):
+        pk = str(item.get("pubkey") if isinstance(item, dict) else item).strip()
+        if pk == expected_recipient.strip():
+            target_idx = i
+            break
+    if target_idx < 0 or target_idx >= len(pre_bals) or target_idx >= len(post_bals):
+        return VerificationResult(
+            verified=False,
+            network="solana",
+            token="",
+            amount_usd=0.0,
+            recipient=expected_recipient,
+            sender="",
+            tx_hash=tx_sig,
+            reason=f"No native SOL credit to {expected_recipient} found in transaction.",
+            raw_proof={},
+        )
+    delta_sol = (int(post_bals[target_idx]) - int(pre_bals[target_idx])) / 1e9
+    if delta_sol <= 0 or spot_price_usd <= 0:
+        return VerificationResult(
+            verified=False,
+            network="solana",
+            token="SOL",
+            amount_usd=0.0,
+            recipient=expected_recipient,
+            sender="",
+            tx_hash=tx_sig,
+            reason="Zero SOL delta or unavailable live SOL price.",
+            raw_proof={},
+        )
+    amount_usd = delta_sol * float(spot_price_usd)
+    if amount_usd + 1e-6 >= float(min_amount_usd) * 0.98:
+        return VerificationResult(
+            verified=True,
+            network="solana",
+            token="SOL",
+            amount_usd=round(amount_usd, 4),
+            recipient=expected_recipient,
+            sender="solana_payer",
+            tx_hash=tx_sig,
+            reason=f"Verified on-chain {delta_sol:.6f} SOL (~${amount_usd:.2f}) transfer on Solana.",
+            raw_proof={"slot": tx_result.get("slot"), "native_amount": delta_sol, "spot_price_usd": spot_price_usd},
+        )
+    return VerificationResult(
+        verified=False,
+        network="solana",
+        token="SOL",
+        amount_usd=round(amount_usd, 4),
+        recipient=expected_recipient,
+        sender="solana_payer",
+        tx_hash=tx_sig,
+        reason=f"Native SOL amount ~${amount_usd:.2f} is below required ${min_amount_usd:.2f}.",
+        raw_proof={"delta_sol": delta_sol, "required_usd": min_amount_usd},
+    )
+
+
+def decode_bitcoin_transfer(
+    tx_obj: dict[str, Any],
+    expected_recipient: str,
+    min_amount_usd: float,
+    tx_hash: str,
+    spot_price_usd: float,
+) -> VerificationResult:
+    """Deterministic decoder for confirmed Mempool.space Bitcoin transactions paying expected_recipient."""
+    target = expected_recipient.strip()
+    total_sats = sum(
+        int(v.get("value") or 0)
+        for v in (tx_obj.get("vout") or [])
+        if str(v.get("scriptpubkey_address") or "").strip() == target
+    )
+    if total_sats <= 0:
+        return VerificationResult(
+            verified=False,
+            network="bitcoin",
+            token="BTC",
+            amount_usd=0.0,
+            recipient=target,
+            sender="",
+            tx_hash=tx_hash,
+            reason=f"No output paying Bitcoin address {target} found in tx.",
+            raw_proof={},
+        )
+    confirmed = bool((tx_obj.get("status") or {}).get("confirmed"))
+    if not confirmed:
+        return VerificationResult(
+            verified=False,
+            network="bitcoin",
+            token="BTC",
+            amount_usd=0.0,
+            recipient=target,
+            sender="",
+            tx_hash=tx_hash,
+            reason="Bitcoin transaction detected in mempool; awaiting 1st block confirmation.",
+            raw_proof={"confirmed": False, "sats": total_sats},
+        )
+    if spot_price_usd <= 0:
+        return VerificationResult(
+            verified=False,
+            network="bitcoin",
+            token="BTC",
+            amount_usd=0.0,
+            recipient=target,
+            sender="",
+            tx_hash=tx_hash,
+            reason="Unable to fetch live BTC/USD price.",
+            raw_proof={},
+        )
+    btc_amt = total_sats / 1e8
+    amount_usd = btc_amt * float(spot_price_usd)
+    if amount_usd + 1e-6 >= float(min_amount_usd) * 0.98:
+        return VerificationResult(
+            verified=True,
+            network="bitcoin",
+            token="BTC",
+            amount_usd=round(amount_usd, 4),
+            recipient=target,
+            sender="bitcoin_payer",
+            tx_hash=tx_hash,
+            reason=f"Verified confirmed Bitcoin transfer of {btc_amt:.8f} BTC (~${amount_usd:.2f}).",
+            raw_proof={"block_height": (tx_obj.get("status") or {}).get("block_height"), "sats": total_sats, "spot_price_usd": spot_price_usd},
+        )
+    return VerificationResult(
+        verified=False,
+        network="bitcoin",
+        token="BTC",
+        amount_usd=round(amount_usd, 4),
+        recipient=target,
+        sender="bitcoin_payer",
+        tx_hash=tx_hash,
+        reason=f"Bitcoin amount ~${amount_usd:.2f} BTC is below required ${min_amount_usd:.2f}.",
+        raw_proof={"sats": total_sats, "amount_usd": amount_usd, "required_usd": min_amount_usd},
+    )
+
+
 class OnChainPaymentVerifier:
     """Queries live public RPCs to verify real stablecoin transfers to Phantom or creator wallets."""
 
@@ -234,6 +530,9 @@ class OnChainPaymentVerifier:
         if net == "solana":
             target = (expected_recipient or StudioConfig.PHANTOM_SOL_ADDRESS).strip()
             return self._verify_solana(tx, min_amount_usd, target)
+        if net == "bitcoin":
+            target = (expected_recipient or StudioConfig.PHANTOM_BTC_ADDRESS).strip()
+            return self._verify_bitcoin(tx, min_amount_usd, target)
         return VerificationResult(
             verified=False,
             network=net,
@@ -242,7 +541,7 @@ class OnChainPaymentVerifier:
             recipient="",
             sender="",
             tx_hash=tx,
-            reason=f"Unsupported network '{net}'. Use base, arbitrum, polygon, bsc, or solana.",
+            reason=f"Unsupported network '{net}'. Use base, arbitrum, polygon, bsc, ethereum, solana, or bitcoin.",
             raw_proof={},
         )
 
@@ -273,12 +572,38 @@ class OnChainPaymentVerifier:
                     reason="Transaction receipt not found yet on RPC (wait a few seconds for confirmation).",
                     raw_proof={"rpc": rpc_url},
                 )
-            return decode_evm_stablecoin_transfer(
+            res = decode_evm_stablecoin_transfer(
                 receipt=receipt,
                 network=network,
                 expected_recipient=target,
                 min_amount_usd=min_amount_usd,
             )
+            if res.verified or "below required" in res.reason:
+                return res
+            if str(receipt.get("status") or "0x0").lower() == "0x1":
+                try:
+                    tx_resp = _rpc_post(
+                        rpc_url,
+                        {"jsonrpc": "2.0", "id": 2, "method": "eth_getTransactionByHash", "params": [tx_hash]},
+                    )
+                    tx_obj = (tx_resp or {}).get("result")
+                    if (
+                        isinstance(tx_obj, dict)
+                        and str(tx_obj.get("to") or "").strip().lower() == target.lower()
+                        and int(str(tx_obj.get("value") or "0x0"), 16) > 0
+                    ):
+                        spot = fetch_native_usd_price(network)
+                        return decode_evm_native_transfer(
+                            tx_obj=tx_obj,
+                            receipt=receipt,
+                            network=network,
+                            expected_recipient=target,
+                            min_amount_usd=min_amount_usd,
+                            spot_price_usd=spot,
+                        )
+                except Exception:
+                    pass
+            return res
         except (urllib.error.URLError, json.JSONDecodeError, OSError, ValueError) as exc:
             return VerificationResult(
                 verified=False,
@@ -322,12 +647,25 @@ class OnChainPaymentVerifier:
                     reason="Solana transaction not found yet on RPC.",
                     raw_proof={},
                 )
-            return decode_solana_stablecoin_transfer(
+            res = decode_solana_stablecoin_transfer(
                 tx_result=tx_result,
                 expected_recipient=target,
                 min_amount_usd=min_amount_usd,
                 tx_sig=tx_sig,
             )
+            if res.verified or "below required" in res.reason:
+                return res
+            spot_sol = fetch_native_usd_price("solana")
+            native_res = decode_solana_native_transfer(
+                tx_result=tx_result,
+                expected_recipient=target,
+                min_amount_usd=min_amount_usd,
+                tx_sig=tx_sig,
+                spot_price_usd=spot_sol,
+            )
+            if native_res.verified or "below required" in native_res.reason:
+                return native_res
+            return res
         except (urllib.error.URLError, json.JSONDecodeError, OSError, ValueError) as exc:
             return VerificationResult(
                 verified=False,
@@ -340,6 +678,79 @@ class OnChainPaymentVerifier:
                 reason=f"Solana RPC error: {exc}",
                 raw_proof={},
             )
+
+    def _verify_bitcoin(
+        self,
+        tx_hash: str,
+        min_amount_usd: float,
+        expected_recipient: str = "",
+    ) -> VerificationResult:
+        target = (expected_recipient or StudioConfig.PHANTOM_BTC_ADDRESS).strip()
+        try:
+            tx_obj = _http_get_json(f"https://mempool.space/api/tx/{tx_hash}", timeout_s=8.0)
+            if not isinstance(tx_obj, dict):
+                return VerificationResult(
+                    verified=False,
+                    network="bitcoin",
+                    token="BTC",
+                    amount_usd=0.0,
+                    recipient=target,
+                    sender="",
+                    tx_hash=tx_hash,
+                    reason="Bitcoin transaction not found on mempool.space yet.",
+                    raw_proof={},
+                )
+            spot_btc = fetch_native_usd_price("bitcoin")
+            return decode_bitcoin_transfer(
+                tx_obj=tx_obj,
+                expected_recipient=target,
+                min_amount_usd=min_amount_usd,
+                tx_hash=tx_hash,
+                spot_price_usd=spot_btc,
+            )
+        except Exception as exc:
+            return VerificationResult(
+                verified=False,
+                network="bitcoin",
+                token="BTC",
+                amount_usd=0.0,
+                recipient=target,
+                sender="",
+                tx_hash=tx_hash,
+                reason=f"Bitcoin verification error: {exc}",
+                raw_proof={},
+            )
+
+    def find_recent_btc_transfers(
+        self,
+        expected_recipient: str,
+        min_amount_usd: float,
+    ) -> list[VerificationResult]:
+        target = expected_recipient.strip()
+        if not target:
+            return []
+        try:
+            txs = _http_get_json(f"https://mempool.space/api/address/{target}/txs", timeout_s=6.0)
+            spot_btc = fetch_native_usd_price("bitcoin")
+            if not isinstance(txs, list) or spot_btc <= 0:
+                return []
+            out: list[VerificationResult] = []
+            for tx_obj in txs[:10]:
+                txid = str(tx_obj.get("txid") or "").strip()
+                if not txid:
+                    continue
+                res = decode_bitcoin_transfer(
+                    tx_obj=tx_obj,
+                    expected_recipient=target,
+                    min_amount_usd=min_amount_usd,
+                    tx_hash=txid,
+                    spot_price_usd=spot_btc,
+                )
+                if res.verified:
+                    out.append(res)
+            return out
+        except Exception:
+            return []
 
     def find_recent_evm_transfers(
         self,

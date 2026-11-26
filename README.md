@@ -1,4 +1,4 @@
-# PayGate USDT v2.6 — Non-Custodial Stablecoin Payment Gateway, Python & TypeScript/Node.js SDKs, `@mcp_tool_paywall` & 8-Tool MCP Server
+# PayGate USDT v2.7 — Non-Custodial Crypto & Stablecoin Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), Python & TypeScript SDKs & MCP Server
 
 [![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
 [![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzequielLech%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzequielLech)
@@ -13,7 +13,7 @@
 
 **Monetize any Python or TypeScript/Node.js MCP Server (`@mcp_tool_paywall` / `withMcpToolPaywall`), FastAPI / Express Route (`@require_usdt_payment` / `paygateExpressMiddleware`), SaaS Subscription, or Telegram VIP Group in USDT & USDC across 6 blockchains straight to your own self-custody wallet.**
 
-No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut. Includes **1-Click Multi-Chain Switcher** (`Base`, `Polygon`, `Arbitrum`, `BSC`, `Ethereum`, `Solana`), **Zero-Tx-Hash On-Chain Payment Auto-Detection**, and a **Self-Serve Merchant Revenue Dashboard (`/paygate/merchant`)**.
+No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut. Includes **1-Click Multi-Chain & Multi-Asset Switcher** (`USDT`, `USDC`, plus native `ETH`, `BNB`, `POL`, `SOL`, and `Bitcoin Taproot bc1p...`), **Zero-Tx-Hash On-Chain Payment Auto-Detection**, and a **Self-Serve Merchant Revenue Dashboard (`/paygate/merchant`)**.
 
 - **Live Cloud Sandbox & Demo:** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
 - **Self-Serve Merchant Revenue Dashboard:** [https://chainguard-studio-production.up.railway.app/paygate/merchant](https://chainguard-studio-production.up.railway.app/paygate/merchant)
@@ -25,12 +25,12 @@ No custodial processor holds your funds. No Stripe / Whop / bank account require
 
 ## Why Builders Choose PayGate USDT Over Custodial Processors
 
-| Feature | PayGate USDT v2.6 | Custodial Gateways / Whop / InviteMember |
+| Feature | PayGate USDT v2.7 | Custodial Gateways / Whop / InviteMember |
 |---|---|---|
 | **Settlement Destination** | **100% direct buyer -> your wallet** (Phantom, MetaMask, Ledger, Safe, Exchange) | Held by intermediary; payout delays / freezes |
-| **Transaction Fees** | **$0% cut** on settlements (self-hosted MIT) | 1%–10% + withdrawal minimums |
+| **Transaction Fees** | **$0% cut** on settlements (self-hosted MIT; hosted cloud includes 3 free sales -> $9/mo Pro) | 1%–10% + withdrawal minimums |
 | **SDK Runtimes** | **Python + Zero-Dependency TypeScript/Node.js (`sdk-js/`)** | Often single-language or heavy SDKs |
-| **Networks Supported** | **Polygon, BSC (BEP-20), Base, Arbitrum, Ethereum, Solana SPL** | Limited or custodian-locked |
+| **Networks & Assets Supported** | **USDT/USDC + Native ETH, BNB, POL, SOL & Bitcoin Taproot (`bc1p...`)** | Limited or custodian-locked |
 | **Hosted Invoice Pages + Webhooks** | Included (`/paygate/checkout/{id}` + `X-PayGate-Signature` `HMAC-SHA256`) | Often requires merchant KYB/KYC |
 | **Non-Custodial SaaS Subscriptions** | Included (`customer_ref` + `billing_days` + `/api/v1/paygate/subscriptions/check`) | Requires cards or infinite token approvals |
 | **HTTP 402 (`x402 v2`) Paywalls** | Included (FastAPI `@require_usdt_payment` + Express `paygateExpressMiddleware`) | Rare / separate SDK |

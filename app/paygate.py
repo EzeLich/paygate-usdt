@@ -19,15 +19,18 @@ from typing import Any
 
 from .config import StudioConfig
 from .ledger import StudioLedger
-from .onchain_verifier import OnChainPaymentVerifier
+from .onchain_verifier import NATIVE_ASSET_SPECS, OnChainPaymentVerifier, fetch_native_usd_price
+
+FREE_CLOUD_SETTLEMENTS_LIMIT = 3
 
 SUPPORTED_NETWORKS: dict[str, dict[str, str]] = {
-    "polygon": {"label": "Polygon (USDT / USDC — ~$0.01 fee)", "tokens": "USDT or USDC"},
-    "bsc": {"label": "BNB Smart Chain BEP20 (USDT / USDC)", "tokens": "USDT or USDC"},
-    "arbitrum": {"label": "Arbitrum One (USDT / USDC)", "tokens": "USDT or USDC"},
-    "base": {"label": "Base (USDC / USDT)", "tokens": "USDC or USDT"},
-    "solana": {"label": "Solana (USDC / USDT — Phantom)", "tokens": "USDC or USDT"},
-    "ethereum": {"label": "Ethereum Mainnet (USDC / USDT)", "tokens": "USDC or USDT"},
+    "polygon": {"label": "Polygon (USDT / USDC / POL — ~$0.01 fee)", "tokens": "USDT, USDC, or POL"},
+    "bsc": {"label": "BNB Smart Chain BEP20 (USDT / USDC / BNB)", "tokens": "USDT, USDC, or BNB"},
+    "arbitrum": {"label": "Arbitrum One (USDT / USDC / ETH)", "tokens": "USDT, USDC, or ETH"},
+    "base": {"label": "Base (USDC / USDT / ETH)", "tokens": "USDC, USDT, or ETH"},
+    "solana": {"label": "Solana (USDC / USDT / SOL — Phantom)", "tokens": "USDC, USDT, or SOL"},
+    "ethereum": {"label": "Ethereum Mainnet (USDC / USDT / ETH)", "tokens": "USDC, USDT, or ETH"},
+    "bitcoin": {"label": "Bitcoin (BTC — Taproot / Bech32)", "tokens": "BTC"},
 }
 
 PAYGATE_B2B_PACKAGES: dict[str, dict[str, Any]] = {
@@ -57,6 +60,7 @@ EVM_TX_RE = re.compile(r"\b0x[a-fA-F0-9]{64}\b")
 SOL_TX_RE = re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{64,92}\b")
 EVM_ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 SOL_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+BTC_ADDR_RE = re.compile(r"^(bc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{25,90}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$")
 
 
 def tg_call(bot_token: str, method: str, payload: dict[str, Any] | None = None) -> tuple[bool, Any]:
@@ -90,14 +94,69 @@ def validate_wallet_for_network(network: str, wallet: str) -> tuple[bool, str]:
     net = network.strip().lower()
     w = wallet.strip()
     if net not in SUPPORTED_NETWORKS:
-        return False, f"Red no soportada '{net}'. Usa polygon, bsc, arbitrum, base o solana."
+        return False, f"Unsupported network '{net}'. Use polygon, bsc, arbitrum, base, ethereum, solana, or bitcoin."
     if net == "solana":
         if not SOL_ADDR_RE.match(w):
-            return False, "La direccion Solana debe ser una clave publica valida de Phantom/Solana."
+            return False, "Solana wallet must be a valid base58 public address."
+        return True, ""
+    if net == "bitcoin":
+        if not BTC_ADDR_RE.match(w):
+            return False, "Bitcoin wallet must be a valid Bech32/Taproot (bc1...) or legacy address."
         return True, ""
     if not EVM_ADDR_RE.match(w):
-        return False, f"Para {net.upper()} debes ingresar una wallet EVM valida que empiece con 0x..."
+        return False, f"For {net.upper()} enter a valid EVM 0x... wallet address."
     return True, ""
+
+
+def _is_studio_wallet(wallet: str) -> bool:
+    w = (wallet or "").strip()
+    if not w:
+        return False
+    return (
+        w.lower() == (StudioConfig.PHANTOM_EVM_ADDRESS or "").strip().lower()
+        or w == (StudioConfig.PHANTOM_SOL_ADDRESS or "").strip()
+        or w == (StudioConfig.PHANTOM_BTC_ADDRESS or "").strip()
+    )
+
+
+def check_cloud_merchant_invoice_quota(
+    ledger: StudioLedger,
+    merchant_wallet: str,
+    base_url: str,
+) -> dict[str, Any]:
+    """Allow 3 free settled sales per merchant wallet on hosted cloud, then require Pro ($9/mo) or Lifetime ($79)."""
+    wal = (merchant_wallet or "").strip()
+    if _is_studio_wallet(wal):
+        return {"allowed": True, "tier": "studio", "paid_count": 0, "limit": None}
+    paid_count = ledger.count_paid_invoices_for_merchant(wal) if hasattr(ledger, "count_paid_invoices_for_merchant") else 0
+    licensed = ledger.has_active_merchant_license(wal) if hasattr(ledger, "has_active_merchant_license") else False
+    if licensed:
+        return {"allowed": True, "tier": "pro_licensed", "paid_count": paid_count, "limit": None}
+    s_evm = StudioConfig.PHANTOM_EVM_ADDRESS or "0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD"
+    q_ref = urllib.parse.quote(wal)
+    up9 = f"{base_url.rstrip('/')}/paygate/pay?merchant={s_evm}&amount=9&network=base&title=PayGate+Cloud+Pro+Unlimited&issue_pass=1&billing_days=30&customer_ref={q_ref}"
+    up79 = f"{base_url.rstrip('/')}/paygate/pay?merchant={s_evm}&amount=79&network=polygon&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650&customer_ref={q_ref}"
+    if paid_count < FREE_CLOUD_SETTLEMENTS_LIMIT:
+        return {
+            "allowed": True,
+            "tier": "free_cloud",
+            "paid_count": paid_count,
+            "limit": FREE_CLOUD_SETTLEMENTS_LIMIT,
+            "upgrade_pro_9_url": up9,
+            "upgrade_lifetime_79_url": up79,
+        }
+    return {
+        "allowed": False,
+        "tier": "free_limit_reached",
+        "paid_count": paid_count,
+        "limit": FREE_CLOUD_SETTLEMENTS_LIMIT,
+        "upgrade_pro_9_url": up9,
+        "upgrade_lifetime_79_url": up79,
+        "error": (
+            f"Hosted cloud free limit reached ({paid_count}/{FREE_CLOUD_SETTLEMENTS_LIMIT} settled sales for {wal}). "
+            "Activate PayGate Cloud Pro ($9/mo) or Lifetime White-Label ($79) in USDT/USDC/ETH/BNB/BTC, or self-host MIT from https://github.com/EzequielLech/paygate-usdt."
+        ),
+    }
 
 
 def _extract_tx_for_network(network: str, text: str) -> str:
@@ -566,10 +625,7 @@ def verify_and_settle_invoice(
     )
     if updated:
         meta = dict(updated.get("metadata") or {})
-        is_studio_merchant = (
-            updated["merchant_wallet"].strip().lower() == StudioConfig.PHANTOM_EVM_ADDRESS.strip().lower()
-            or updated["merchant_wallet"].strip() == StudioConfig.PHANTOM_SOL_ADDRESS.strip()
-        )
+        is_studio_merchant = _is_studio_wallet(updated["merchant_wallet"])
         billing_days = int(meta.get("billing_days") or 0)
         customer_ref = str(meta.get("customer_ref") or "").strip()
         meta_changed = False
@@ -652,20 +708,38 @@ def auto_detect_and_settle_invoice(
     ledger: StudioLedger,
     verifier: OnChainPaymentVerifier,
 ) -> dict[str, Any]:
-    """Scan recent Transfer logs across the invoice network (and fallback EVM chains) to settle without manual tx_hash entry."""
+    """Scan recent Transfer logs across EVM chains (or mempool on Bitcoin) to settle without manual tx_hash entry."""
     inv = ledger.get_paygate_invoice(invoice_id)
     if not inv:
         return {"ok": False, "status_code": 404, "error": "Invoice not found."}
     if inv["status"] == "paid":
         return {"ok": True, "invoice": inv, "already_paid": True}
     wal = str(inv["merchant_wallet"] or "").strip()
+    primary = str(inv["network"] or "polygon").strip().lower()
+    if primary == "bitcoin" and hasattr(verifier, "find_recent_btc_transfers"):
+        for m in verifier.find_recent_btc_transfers(expected_recipient=wal, min_amount_usd=float(inv["amount_usd"])):
+            if not m.tx_hash or ledger.is_tx_used(m.tx_hash):
+                continue
+            settled = verify_and_settle_invoice(
+                invoice_id=invoice_id,
+                tx_hash=m.tx_hash,
+                ledger=ledger,
+                verifier=verifier,
+                network_override="bitcoin",
+            )
+            if settled.get("ok"):
+                return settled
+        return {
+            "ok": False,
+            "status_code": 402,
+            "error": f"No confirmed Bitcoin payment >= ${float(inv['amount_usd']):.2f} BTC to {wal[:12]}... detected yet. Paste TXID once confirmed.",
+        }
     if not wal.startswith("0x") or not hasattr(verifier, "find_recent_evm_transfers"):
         return {
             "ok": False,
             "status_code": 402,
             "error": "Paste your transaction signature in the box above to verify.",
         }
-    primary = str(inv["network"] or "polygon").strip().lower()
     chains = [primary] + [c for c in ("base", "polygon", "arbitrum", "bsc", "ethereum") if c != primary]
     for net in chains:
         matches = verifier.find_recent_evm_transfers(
@@ -700,6 +774,7 @@ _EXPLORER_TX_URLS: dict[str, str] = {
     "arbitrum": "https://arbiscan.io/tx/",
     "ethereum": "https://etherscan.io/tx/",
     "solana": "https://solscan.io/tx/",
+    "bitcoin": "https://mempool.space/tx/",
 }
 
 
@@ -732,10 +807,12 @@ def build_invoice_receipt(invoice: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _wallet_payment_uri(invoice: dict[str, Any]) -> str:
+def _wallet_payment_uri(invoice: dict[str, Any], native_amount: float = 0.0) -> str:
     net = str(invoice.get("network") or "polygon").lower()
     wal = str(invoice.get("merchant_wallet") or "").strip()
     amt = float(invoice.get("amount_usd") or 0.0)
+    if net == "bitcoin":
+        return f"bitcoin:{wal}?amount={native_amount:.8f}" if native_amount > 0 else f"bitcoin:{wal}"
     if net == "solana":
         usdc_mint = StudioConfig.SOLANA_STABLECOINS["USDC"][0]
         return f"solana:{wal}?amount={amt:.2f}&spl-token={usdc_mint}"
@@ -766,7 +843,16 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     api_pass = (invoice.get("metadata") or {}).get("api_pass") or {}
     api_key_esc = html.escape(str(api_pass.get("api_key") or ""))
     receipt_url = f"{base}/paygate/receipt/{inv_id}"
-    pay_uri = html.escape(_wallet_payment_uri(invoice))
+
+    native_sym = (NATIVE_ASSET_SPECS.get(net_raw) or ("", ""))[0]
+    spot_px = 0.0
+    if not is_paid and native_sym:
+        try:
+            spot_px = fetch_native_usd_price(net_raw)
+        except Exception:
+            spot_px = 0.0
+    native_est = ((amt_f / spot_px) * 1.005) if spot_px > 0 else 0.0
+    pay_uri = html.escape(_wallet_payment_uri(invoice, native_amount=native_est))
 
     evm_tokens = StudioConfig.EVM_STABLECOINS.get(net_raw, {})
     evm_chain_id = StudioConfig.EVM_CHAIN_IDS.get(net_raw, 137)
@@ -776,15 +862,13 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     chain_switcher_html = ""
     tier_switcher_html = ""
     raw_wal = invoice["merchant_wallet"].strip()
-    is_studio_inv = (
-        raw_wal.lower() == (StudioConfig.PHANTOM_EVM_ADDRESS or "").strip().lower()
-        or raw_wal == (StudioConfig.PHANTOM_SOL_ADDRESS or "").strip()
-    )
+    is_studio_inv = _is_studio_wallet(raw_wal)
     if not is_paid and (raw_wal.startswith("0x") or is_studio_inv):
         pills = []
         net_choices = [("base", "Base"), ("polygon", "Polygon"), ("arbitrum", "Arbitrum"), ("bsc", "BSC (BEP-20)"), ("ethereum", "Ethereum")]
         if is_studio_inv:
-            net_choices.append(("solana", "Solana (SPL)"))
+            net_choices.append(("solana", "Solana (SPL + SOL)"))
+            net_choices.append(("bitcoin", "Bitcoin (BTC)"))
         for c_net, c_lbl in net_choices:
             active_style = "background:#10b981;color:#02160f;border-color:#10b981;font-weight:800;" if c_net == net_raw else "background:#070b14;color:#cbd5e1;border-color:#334155;"
             pills.append(
@@ -792,7 +876,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             )
         chain_switcher_html = (
             '<div style="margin-bottom:14px;">'
-            '<div style="font-size:.78rem;color:#94a3b8;font-weight:700;margin-bottom:6px;">SWITCH PAYMENT NETWORK (PAY FROM ANY CHAIN YOU HOLD USDT/USDC ON):</div>'
+            '<div style="font-size:.78rem;color:#94a3b8;font-weight:700;margin-bottom:6px;">SWITCH PAYMENT NETWORK (PAY IN USDT, USDC, OR NATIVE ETH/BNB/POL/SOL/BTC):</div>'
             f'<div style="display:flex;gap:6px;flex-wrap:wrap;">{"".join(pills)}</div>'
             '</div>'
         )
@@ -802,7 +886,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
         tier_switcher_html = (
             '<div style="margin-bottom:14px;padding:11px 13px;background:#070b14;border:1px solid #1e293b;border-radius:10px;">'
             '<div style="font-size:.76rem;color:#38bdf8;font-weight:800;margin-bottom:6px;">INSTANT AUTOMATED ON-SCREEN DELIVERY (NO EMAIL OR SIGNUP NEEDED):</div>'
-            '<div style="font-size:.79rem;color:#cbd5e1;margin-bottom:8px;">Upon 1 block confirmation (~3–5s), this screen automatically detects your transfer and reveals your <code>cg_live_...</code> API / White-Label License Key + cryptographic SHA-256 receipt. Switch plan in 1 click:</div>'
+            '<div style="font-size:.79rem;color:#cbd5e1;margin-bottom:8px;">Upon 1 block confirmation (~3–5s on EVM/Solana), this screen automatically reveals your <code>cg_live_...</code> API / White-Label License Key + SHA-256 receipt. Switch plan in 1 click:</div>'
             '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
             f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" style="padding:4px 10px;border-radius:8px;border:1px solid #38bdf8;color:#7dd3fc;text-decoration:none;font-size:.78rem;font-weight:700;">$0.50 · 24h Test Pass (50 calls)</a>'
             f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" style="padding:4px 10px;border-radius:8px;border:1px solid #10b981;color:#6ee7b7;text-decoration:none;font-size:.78rem;font-weight:700;">$2.00 · 7-Day Pass (250 calls)</a>'
@@ -816,6 +900,9 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             btns.append(f"""<button class="btn" onclick="payWithWallet('{usdt_addr}', {usdt_dec}, 'USDT')">1-Click Pay ${amt} USDT (Browser Wallet)</button>""")
         if usdc_addr:
             btns.append(f"""<button class="btn2" style="border-color:#38bdf8;color:#7dd3fc;" onclick="payWithWallet('{usdc_addr}', {usdc_dec}, 'USDC')">1-Click Pay ${amt} USDC (Browser Wallet)</button>""")
+        if native_sym:
+            est_lbl = f"~{native_est:.6f} " if native_est > 0 else ""
+            btns.append(f"""<button class="btn2" style="border-color:#a855f7;color:#d8b4fe;" onclick="payNativeWithWallet()">1-Click Pay {est_lbl}{native_sym} (Native)</button>""")
         if btns:
             one_click_btns = f"""<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">{''.join(btns)}</div>"""
 
@@ -851,7 +938,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
           {one_click_btns}
           <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;">
             <div style="flex:1;min-width:240px;">
-              <label>1. Send exact amount (<strong>${amt}</strong> USDT or USDC on <strong>{net}</strong>) to merchant wallet:</label>
+              <label>1. Send exact amount (<strong>${amt}</strong> {'BTC (~' + f'{native_est:.8f} BTC)' if (net_raw == 'bitcoin' and native_est > 0) else ('USDT / USDC' + (f' or ~{native_est:.6f} {native_sym}' if (native_sym and native_est > 0) else (f' or {native_sym}' if native_sym else '')))} on <strong>{net}</strong>) to merchant wallet:</label>
               <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
                 <code id="mWal" style="flex:1;padding:10px;display:block;">{wallet}</code>
                 <button class="btn2" onclick="navigator.clipboard.writeText('{wallet}');this.textContent='Copied!'">Copy Wallet</button>
@@ -869,20 +956,20 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
             <button class="btn" onclick="autoDetectInv(false)">I Sent It — Auto-Detect On-Chain (No TX Hash Needed)</button>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-            <input id="invTx" style="flex:1;min-width:220px;" placeholder="Or paste 0x... / Solana tx signature"/>
+            <input id="invTx" style="flex:1;min-width:220px;" placeholder="Or paste 0x... / Solana / Bitcoin TXID"/>
             <button class="btn2" onclick="verifyInv()">Verify by TX Hash</button>
           </div>
           <div id="invMsg" style="margin-top:10px;font-size:.9rem;color:#38bdf8;">Listening for on-chain transfer to {wallet[:10]}... on {net}...</div>
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e293b;font-size:.8rem;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <span>Short on {net} USDT/USDC?</span>
-            <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">Swap Any Token or Dust into USDT/USDC →</a>
+            <a href="{base}/recover" target="_blank" style="color:#38bdf8;font-weight:700;">Swap Any Token or Dust into USDT/USDC -></a>
           </div>
         </div>"""
     )
     cents_int = int(round(amt_f * 100))
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Pay ${amt} USDT — {title} | PayGate USDT</title>
+<title>Pay ${amt} {html.escape(native_sym or 'USDT')} — {title} | PayGate USDT</title>
 <style>
   *{{box-sizing:border-box}} body{{margin:0;background:#070b14;color:#f1f5f9;font-family:Inter,system-ui,sans-serif;line-height:1.55}}
   .wrap{{max-width:680px;margin:0 auto;padding:32px 16px 64px}}
@@ -899,19 +986,58 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any]) -> str:
     <span style="font-size:.82rem;color:#94a3b8;">Invoice <code>{inv_id}</code> · {net}</span>
   </div>
   <div class="card">
-    <div style="color:#94a3b8;font-size:.86rem;">NON-CUSTODIAL STABLECOIN CHECKOUT</div>
+    <div style="color:#94a3b8;font-size:.86rem;">NON-CUSTODIAL CRYPTO CHECKOUT</div>
     <h1 style="margin:6px 0 8px;font-size:1.55rem;">{title}</h1>
-    <div style="font-size:2.1rem;font-weight:900;color:#10b981;">${amt} <span style="font-size:.95rem;color:#94a3b8;">USDT / USDC ({net})</span></div>
+    <div style="font-size:2.1rem;font-weight:900;color:#10b981;">${amt} <span style="font-size:.95rem;color:#94a3b8;">USDT / USDC{' or ' + html.escape(native_sym) if native_sym else ''} ({net})</span></div>
   </div>
   {paid_block}
   <div style="margin-top:20px;text-align:center;font-size:.8rem;color:#64748b;">
-    Powered by <a href="https://github.com/EzeLich/paygate-usdt" target="_blank" style="color:#38bdf8;">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate" style="color:#94a3b8;">Create your own checkout</a>
+    Powered by <a href="https://github.com/EzequielLech/paygate-usdt" target="_blank" style="color:#38bdf8;">PayGate USDT Open-Source Gateway</a> · <a href="{base}/paygate" style="color:#94a3b8;">Create your own checkout</a>
   </div>
 </div>
 <script>
 const TARGET_CHAIN_HEX = '0x' + ({evm_chain_id}).toString(16);
 const MERCHANT_WALLET = '{wallet}';
 const CENTS_INT = {cents_int};
+const AMOUNT_USD = {amt_f};
+const TARGET_NETWORK = '{net_raw}';
+
+async function payNativeWithWallet() {{
+  const m = document.getElementById('invMsg');
+  if (!window.ethereum) {{
+    m.style.color = '#fca5a5';
+    m.textContent = 'No browser wallet detected (MetaMask/Rabby/Phantom). Transfer manually above and paste TX hash.';
+    return;
+  }}
+  try {{
+    m.style.color = '#38bdf8';
+    m.textContent = 'Fetching live ' + TARGET_NETWORK.toUpperCase() + ' spot quote...';
+    const qr = await fetch('/api/v1/paygate/quote?amount_usd=' + AMOUNT_USD + '&network=' + encodeURIComponent(TARGET_NETWORK));
+    const q = await qr.json();
+    if (!qr.ok || !q.wei_hex) {{
+      m.style.color = '#fca5a5';
+      m.textContent = (q && q.detail) ? q.detail : 'Unable to fetch native gas quote.';
+      return;
+    }}
+    const accs = await window.ethereum.request({{ method: 'eth_requestAccounts' }});
+    const from = accs[0];
+    try {{
+      await window.ethereum.request({{ method: 'wallet_switchEthereumChain', params: [{{ chainId: TARGET_CHAIN_HEX }}] }});
+    }} catch (swErr) {{}}
+    m.textContent = 'Confirm ~' + q.native_amount + ' ' + q.native_symbol + ' ($' + AMOUNT_USD.toFixed(2) + ') in your wallet...';
+    const txHash = await window.ethereum.request({{
+      method: 'eth_sendTransaction',
+      params: [{{ from: from, to: MERCHANT_WALLET, value: q.wei_hex }}]
+    }});
+    document.getElementById('invTx').value = txHash;
+    m.style.color = '#34d399';
+    m.textContent = 'TX broadcast (' + txHash.slice(0, 14) + '...). Waiting for RPC finality...';
+    pollVerify();
+  }} catch (err) {{
+    m.style.color = '#fca5a5';
+    m.textContent = (err && err.message) ? err.message : 'Native wallet payment cancelled.';
+  }}
+}}
 
 async function payWithWallet(tokenContract, decimals, sym) {{
   const m = document.getElementById('invMsg');
@@ -1000,7 +1126,7 @@ async function autoDetectInv(silentBg) {{
     return false;
   }}
 }}
-if ({'false' if is_paid else 'true'} && MERCHANT_WALLET.startsWith('0x')) {{
+if ({'false' if is_paid else 'true'} && (MERCHANT_WALLET.startsWith('0x') || TARGET_NETWORK === 'bitcoin')) {{
   setInterval(function() {{
     if (!document.hidden) autoDetectInv(true);
   }}, 12000);
@@ -1192,13 +1318,14 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
           <option value="bsc">BSC BEP20</option>
           <option value="base">Base</option>
           <option value="arbitrum">Arbitrum</option>
-          <option value="solana">Solana</option>
-          <option value="ethereum">Ethereum</option>
+          <option value="solana">Solana (USDC / USDT / SOL)</option>
+          <option value="ethereum">Ethereum (ETH / USDC / USDT)</option>
+          <option value="bitcoin">Bitcoin (BTC Taproot)</option>
         </select>
       </div>
       <div>
-        <label>{'Merchant Wallet (0x... or Solana)' if not is_es else 'Tu Wallet Receptora (0x... o Solana)'}</label>
-        <input id="invWallet" placeholder="0x... or Solana address"/>
+        <label>{'Merchant Wallet (0x..., Solana, or BTC)' if not is_es else 'Tu Wallet Receptora (0x..., Solana o BTC)'}</label>
+        <input id="invWallet" placeholder="0x..., Solana, or bc1p... BTC address"/>
       </div>
     </div>
     <label>{'Webhook Callback URL (optional — receives signed X-PayGate-Signature)' if not is_es else 'URL Webhook (opcional — recibe evento invoice.paid firmado)'}</label>
@@ -1601,7 +1728,12 @@ async function activarPro() {{
 </script></body></html>"""
 
 
-def render_paygate_merchant_dashboard_html(base: str, wallet: str, invoices: list[dict[str, Any]]) -> str:
+def render_paygate_merchant_dashboard_html(
+    base: str,
+    wallet: str,
+    invoices: list[dict[str, Any]],
+    quota_status: dict[str, Any] | None = None,
+) -> str:
     """Self-serve non-custodial Merchant Revenue Dashboard & Python/TypeScript/HTML snippet generator."""
     clean_wal = wallet.strip()
     snippet_wal = clean_wal or "0xYourWalletAddress"
@@ -1613,6 +1745,30 @@ def render_paygate_merchant_dashboard_html(base: str, wallet: str, invoices: lis
     pending_invs = [i for i in invoices if i.get("status") == "pending"]
     expired_invs = [i for i in invoices if i.get("status") == "expired"]
     total_settled = round(sum(float(i.get("paid_amount_usd") or i.get("amount_usd") or 0.0) for i in paid_invs), 2)
+
+    qs = quota_status or {}
+    quota_banner = ""
+    if clean_wal and qs:
+        q_tier = str(qs.get("tier") or "free_cloud")
+        q_paid = int(qs.get("paid_count") or len(paid_invs))
+        if q_tier in ("pro_licensed", "studio"):
+            quota_banner = (
+                '<div class="card" style="border-color:#10b981;background:#052e16;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
+                '<div><strong>CLOUD PLAN ACTIVE:</strong> Unlimited hosted invoices, webhooks, and 0% settlement fees enabled for this wallet.</div>'
+                '</div>'
+            )
+        else:
+            q_lim = int(qs.get("limit") or FREE_CLOUD_SETTLEMENTS_LIMIT)
+            up9 = html.escape(str(qs.get("upgrade_pro_9_url") or f"{base}/paygate/pay?merchant={s_evm}&amount=9&network=base&issue_pass=1&billing_days=30"))
+            up79 = html.escape(str(qs.get("upgrade_lifetime_79_url") or f"{base}/paygate/pay?merchant={s_evm}&amount=79&network=polygon&issue_pass=1&billing_days=3650"))
+            border_c = "#ef4444" if not qs.get("allowed", True) else "#f59e0b"
+            quota_banner = (
+                f'<div class="card" style="border-color:{border_c};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'
+                f'<div><strong>Hosted Cloud Quota:</strong> {q_paid} / {q_lim} free settled sales used for this wallet. Unlock unlimited cloud settlement anytime (or self-host MIT free):</div>'
+                f'<div style="display:flex;gap:8px;flex-wrap:wrap;"><a class="btn2" style="border-color:#a855f7;color:#d8b4fe;" href="{up9}">Unlock Cloud Pro ($9/mo)</a>'
+                f'<a class="btn" href="{up79}">Lifetime White-Label ($79)</a></div>'
+                '</div>'
+            )
 
     rows_html = ""
     for inv in invoices[:50]:
@@ -1734,6 +1890,7 @@ def render_paygate_merchant_dashboard_html(base: str, wallet: str, invoices: lis
     <div class="kpi"><div style="font-size:.78rem;color:#94a3b8;">Pending Invoices</div><div class="v" style="color:#fcd34d;">{len(pending_invs)}</div></div>
     <div class="kpi"><div style="font-size:.78rem;color:#94a3b8;">Expired / Total</div><div class="v" style="color:#cbd5e1;">{len(expired_invs)} / {len(invoices)}</div></div>
   </div>
+  {quota_banner}
 
   <div class="card">
     <h2 style="margin:0 0 10px;font-size:1.15rem;">Invoice Ledger ({html.escape(clean_wal) if clean_wal else 'No wallet selected'})</h2>
@@ -1750,7 +1907,7 @@ def render_paygate_merchant_dashboard_html(base: str, wallet: str, invoices: lis
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
       <div><label>Title</label><input id="mTitle" value="Pro Access"/></div>
       <div><label>Amount (USD)</label><input id="mAmt" type="number" step="0.5" value="29"/></div>
-      <div><label>Network</label><select id="mNet"><option value="base">Base</option><option value="polygon">Polygon</option><option value="arbitrum">Arbitrum</option><option value="bsc">BSC BEP20</option><option value="solana">Solana</option><option value="ethereum">Ethereum</option></select></div>
+      <div><label>Network</label><select id="mNet"><option value="base">Base (USDC/ETH)</option><option value="polygon">Polygon (USDT/POL)</option><option value="arbitrum">Arbitrum (USDC/ETH)</option><option value="bsc">BSC BEP20 (USDT/BNB)</option><option value="solana">Solana (USDC/SOL)</option><option value="ethereum">Ethereum (ETH/USDC)</option><option value="bitcoin">Bitcoin (BTC)</option></select></div>
       <div><label>Merchant Wallet</label><input id="mWal" value="{snip_esc}"/></div>
     </div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
