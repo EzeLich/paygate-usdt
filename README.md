@@ -1,5 +1,6 @@
-# PayGate USDT v2.8 — Non-Custodial Crypto & Stablecoin Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), Python & TypeScript SDKs & MCP Server
+# PayGate USDT v2.8.1 — Non-Custodial 7-Chain Crypto Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), GitHub Action, x402 v2 & MCP Server
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-PayGate%20x402%20%26%20Checkout%20Gate-10b981.svg)](https://github.com/marketplace/actions/paygate-x402-crypto-checkout-gate)
 [![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
 [![Official MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.EzequielLech%2Fpaygate--usdt-2563eb.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=EzequielLech)
 [![PayGate USDT MCP server](https://glama.ai/mcp/servers/EzequielLech/paygate-usdt/badges/score.svg)](https://glama.ai/mcp/servers/EzequielLech/paygate-usdt)
@@ -11,21 +12,47 @@
 [![MCP Native](https://img.shields.io/badge/MCP-Streamable%20HTTP%202025--06--18-38bdf8.svg)](https://chainguard-studio-production.up.railway.app/paygate/mcp)
 [![Custody: Zero](https://img.shields.io/badge/Custody-0%25%20Non--Custodial-10b981.svg)](https://chainguard-studio-production.up.railway.app/paygate)
 
-**Monetize any Python or TypeScript/Node.js MCP Server (`@mcp_tool_paywall` / `withMcpToolPaywall`), FastAPI / Express Route (`@require_usdt_payment` / `paygateExpressMiddleware`), SaaS Subscription, or Telegram VIP Group in USDT & USDC across 6 blockchains straight to your own self-custody wallet.**
+**Monetize any Python or TypeScript/Node.js MCP Server (`@mcp_tool_paywall` / `withMcpToolPaywall`), FastAPI / Express Route (`@require_usdt_payment` / `paygateExpressMiddleware`), SaaS Subscription, GitHub Repository, or Telegram VIP Group across 7 blockchains straight to your own self-custody wallet.**
 
-No custodial processor holds your funds. No Stripe / Whop / bank account requirements. No platform percentage cut. Includes **1-Click Multi-Chain & Multi-Asset Switcher** (`USDT`, `USDC`, plus native `ETH`, `BNB`, `POL`, `SOL`, and `Bitcoin Taproot bc1p...`), **Zero-Tx-Hash On-Chain Payment Auto-Detection**, and a **Self-Serve Merchant Revenue Dashboard (`/paygate/merchant`)**.
+No custodial processor holds your funds. No Stripe / Whop / bank account requirements. **0% platform cut on settlements.** Includes **1-Click MetaMask & Phantom Checkout** (`USDT`, `USDC`, plus native `ETH`, `BNB`, `POL`, `SOL`, and `Bitcoin Taproot bc1p...`), **Zero-Tx-Hash On-Chain Payment Auto-Detection**, and a **Self-Serve Merchant Revenue Dashboard (`/paygate/merchant`)**.
 
-- **Live Cloud Sandbox & Demo:** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
+- **Generate a Free Live Checkout Link in 5s (First 3 Sales Free):** [https://chainguard-studio-production.up.railway.app/paygate](https://chainguard-studio-production.up.railway.app/paygate)
+- **Instant Managed Plans (1-Click On-Chain Activation):**
+  - [Cloud Pro ($9/mo — Unlimited Hosted Invoices + 1,000 Pro API Calls) ->](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=9&network=base&title=PayGate+Cloud+Pro+30d&issue_pass=1&billing_days=30)
+  - [Lifetime White-Label License ($79 One-Time — Unlimited Forever + 25,000 Master Calls) ->](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=79&network=base&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650)
+  - [Turnkey Done-For-You VIP Bot / Custom Billing ($199 / $99 Kickoff Deposit) ->](https://chainguard-studio-production.up.railway.app/paygate#b2b)
 - **Self-Serve Merchant Revenue Dashboard:** [https://chainguard-studio-production.up.railway.app/paygate/merchant](https://chainguard-studio-production.up.railway.app/paygate/merchant)
-- **Live Telegram VIP Bot Demo:** [@ChainGuardVaultBot (`?start=vip`)](https://t.me/ChainGuardVaultBot?start=vip)
-- **Live Dedicated MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/paygate/mcp` (`create_usdt_invoice`, `get_usdt_invoice`, `list_usdt_invoices`, `verify_usdt_invoice`, `expire_usdt_invoice`, `check_usdt_subscription`, `verify_onchain_transfer`, `build_x402_paywall_challenge`)
-- **Sister 15-Tool Web3 Security & CI Gate (`EzequielLech/chainguard-mcp`):** [https://github.com/EzequielLech/chainguard-mcp](https://github.com/EzequielLech/chainguard-mcp)
+- **Live Dedicated MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/paygate/mcp`
+- **Sister 15-Tool Web3 Security & CI Gate (`EzequielLech/chainguard-mcp`):** [https://github.com/marketplace/actions/chainguard-web3-mcp-security-gate](https://github.com/marketplace/actions/chainguard-web3-mcp-security-gate)
+
+---
+
+## GitHub Action: Validate x402 Manifests & Generate 0%-Fee Checkout Links (`v2.8.1`)
+
+Validate `.well-known/x402.json` v2 payment manifests on every pull request and automatically emit ready-to-paste 7-chain USDT/USDC checkout links and Markdown badges into `$GITHUB_STEP_SUMMARY`:
+
+```yaml
+name: PayGate x402 & Checkout Gate
+on: [push, pull_request]
+jobs:
+  paygate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EzequielLech/paygate-usdt@v2.8.1
+        with:
+          manifest-path: ".well-known/x402.json"
+          merchant-wallet: "0xYourSelfCustodyWallet"
+          amount-usd: "29"
+          network: "base"
+          title: "Pro License"
+```
 
 ---
 
 ## Why Builders Choose PayGate USDT Over Custodial Processors
 
-| Feature | PayGate USDT v2.7 | Custodial Gateways / Whop / InviteMember |
+| Feature | PayGate USDT v2.8.1 | Custodial Gateways / Whop / InviteMember |
 |---|---|---|
 | **Settlement Destination** | **100% direct buyer -> your wallet** (Phantom, MetaMask, Ledger, Safe, Exchange) | Held by intermediary; payout delays / freezes |
 | **Transaction Fees** | **$0% cut** on settlements (self-hosted MIT; hosted cloud includes 3 free sales -> $9/mo Pro) | 1%–10% + withdrawal minimums |
