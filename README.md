@@ -1,4 +1,4 @@
-# PayGate USDT v2.8.1 — Non-Custodial 7-Chain Crypto Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), GitHub Action, x402 v2 & MCP Server
+# PayGate USDT v2.9.0 — Non-Custodial 7-Chain Crypto Payment Gateway (USDT, USDC, ETH, BNB, POL, SOL, BTC), GitHub Action, x402 v2 & MCP Server
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-PayGate%20x402%20%26%20Checkout%20Gate-10b981.svg)](https://github.com/marketplace/actions/paygate-x402-crypto-checkout-gate)
 [![CI](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml/badge.svg)](https://github.com/EzequielLech/paygate-usdt/actions/workflows/ci.yml)
@@ -23,12 +23,13 @@ No custodial processor holds your funds. No Stripe / Whop / bank account require
   - [Lifetime White-Label License ($79 One-Time — Unlimited Forever + 25,000 Master Calls) ->](https://chainguard-studio-production.up.railway.app/paygate/pay?merchant=0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD&amount=79&network=base&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650)
   - [Turnkey Done-For-You VIP Bot / Custom Billing ($199 / $99 Kickoff Deposit) ->](https://chainguard-studio-production.up.railway.app/paygate#b2b)
 - **Self-Serve Merchant Revenue Dashboard:** [https://chainguard-studio-production.up.railway.app/paygate/merchant](https://chainguard-studio-production.up.railway.app/paygate/merchant)
+- **Reusable Personal & GitHub Sponsors Storefront (`/paygate/me/{wallet}`):** [https://chainguard-studio-production.up.railway.app/paygate/me/chainguard](https://chainguard-studio-production.up.railway.app/paygate/me/chainguard)
 - **Live Dedicated MCP Server Endpoint:** `POST https://chainguard-studio-production.up.railway.app/paygate/mcp`
 - **Sister 15-Tool Web3 Security & CI Gate (`EzequielLech/chainguard-mcp`):** [https://github.com/marketplace/actions/chainguard-web3-mcp-security-gate](https://github.com/marketplace/actions/chainguard-web3-mcp-security-gate)
 
 ---
 
-## GitHub Action: Validate x402 Manifests & Generate 0%-Fee Checkout Links (`v2.8.1`)
+## GitHub Action: Validate x402 Manifests & Generate 0%-Fee Checkout Links (`v2.9.0`)
 
 Validate `.well-known/x402.json` v2 payment manifests on every pull request and automatically emit ready-to-paste 7-chain USDT/USDC checkout links and Markdown badges into `$GITHUB_STEP_SUMMARY`:
 
@@ -40,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EzequielLech/paygate-usdt@v2.8.1
+      - uses: EzequielLech/paygate-usdt@v2.9.0
         with:
           manifest-path: ".well-known/x402.json"
           merchant-wallet: "0xYourSelfCustodyWallet"
@@ -53,7 +54,7 @@ jobs:
 
 ## Why Builders Choose PayGate USDT Over Custodial Processors
 
-| Feature | PayGate USDT v2.8.1 | Custodial Gateways / Whop / InviteMember |
+| Feature | PayGate USDT v2.9.0 | Custodial Gateways / Whop / InviteMember |
 |---|---|---|
 | **Settlement Destination** | **100% direct buyer -> your wallet** (Phantom, MetaMask, Ledger, Safe, Exchange) | Held by intermediary; payout delays / freezes |
 | **Transaction Fees** | **$0% cut** on settlements (self-hosted MIT; hosted cloud includes 3 free sales -> $9/mo Pro) | 1%–10% + withdrawal minimums |

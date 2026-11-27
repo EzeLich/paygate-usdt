@@ -1,6 +1,6 @@
 {
   "name": "paygate-usdt",
-  "version": "2.8.1",
+  "version": "2.9.0",
   "description": "Zero-dependency Node.js SDK & MCP stdio bridge for PayGate 7-chain non-custodial crypto checkout & x402 v2 paywalls.",
   "type": "module",
   "main": "./sdk-js/index.mjs",

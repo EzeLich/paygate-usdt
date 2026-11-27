@@ -6,11 +6,11 @@ const API_KEY = process.env.CHAINGUARD_API_KEY || "";
 const args = process.argv.slice(2);
 
 if (args.includes("--version") || args.includes("-v")) {
-  console.log("2.8.1");
+  console.log("2.9.0");
   process.exit(0);
 }
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("PayGate USDT v2.8.1 — Zero-install 7-chain crypto checkout MCP bridge (npx -y github:EzequielLech/paygate-usdt)");
+  console.log("PayGate USDT v2.9.0 — Zero-install 7-chain crypto checkout MCP bridge (npx -y github:EzequielLech/paygate-usdt)");
   process.exit(0);
 }
 
