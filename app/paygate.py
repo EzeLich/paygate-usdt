@@ -1755,6 +1755,7 @@ def render_paygate_landing_html(base: str, stats: dict[str, Any], lang: str = "e
       <button class="btn" onclick="createInstantInvoice()">{'Generate Hosted Checkout URL' if not is_es else 'Generar Link de Cobro'}</button>
       <span id="invCreateMsg" style="font-size:.88rem;"></span>
     </div>
+    <div style="margin-top:10px;font-size:.81rem;color:#94a3b8;">{'Want a permanent reusable storefront for your X bio or GitHub Sponsors (.github/FUNDING.yml)? Share ' if not is_es else 'Queres un perfil de cobro permanente para tu bio o GitHub FUNDING.yml? Usa '}<code>{base}/paygate/me/0xYourWallet</code> (<a href="{base}/paygate/me/chainguard" style="color:#38bdf8;font-weight:600;">{'Live Demo ->' if not is_es else 'Ver Demo ->'}</a>)</div>
     <div id="invCreateOut" style="margin-top:12px;"></div>
   </div>
 
@@ -2429,5 +2430,206 @@ async function createDashInvoice() {{
     <strong>Checkout URL:</strong> <a style="color:#6ee7b7;font-weight:800;" href="${{d.checkout_url}}" target="_blank">${{d.checkout_url}}</a>
     <span style="margin-left:8px;font-size:.82rem;">(ID: <code>${{d.invoice.invoice_id}}</code>)</span>
   </div>`;
+}}
+</script></body></html>"""
+
+
+def render_paygate_profile_html(
+    base: str,
+    wallet: str,
+    default_network: str = "base",
+    *,
+    display_name: str = "",
+    subtitle: str = "",
+    white_label: bool = False,
+) -> str:
+    """Permanent zero-signup Personal / Freelancer / GitHub FUNDING.yml 7-chain Storefront."""
+    clean_wal = wallet.strip()
+    is_studio = _is_studio_wallet(clean_wal)
+    wal_esc = html.escape(clean_wal)
+    short_wal = f"{clean_wal[:8]}...{clean_wal[-6:]}" if len(clean_wal) > 18 else clean_wal
+    brand_title = html.escape(
+        display_name.strip()
+        or ("ChainGuard & PayGate Official Storefront" if is_studio else f"Direct Crypto Checkout · {short_wal}")
+    )
+    brand_sub = html.escape(
+        subtitle.strip()
+        or (
+            "Instant on-chain licenses, Verified Solidity/MCP Security Badges, Grant Dossiers, and Turnkey B2B Engineering — 0% custody."
+            if is_studio
+            else "100% non-custodial direct-to-wallet settlement with verifiable SHA-256 receipts and 0% platform cut."
+        )
+    )
+    if is_studio:
+        tiers = [
+            ("9", "Cloud Pro & Unlimited MCP (30d)", "1,000 Pro API calls + unlimited PayGate Cloud settlements"),
+            ("19", "Verified Repo Security Badge", "Emerald ChainGuard Verified README SVG + SHA-256 certificate"),
+            ("49", "Grant & Investor Audit Dossier", "Full Solidity/MCP code patches + downloadable audit dossier"),
+            ("79", "Lifetime White-Label License", "Remove PayGate branding forever + 25,000 Master API calls"),
+        ]
+    else:
+        tiers = [
+            ("10", "Open-Source Support", "Direct appreciation & priority issue triage"),
+            ("49", "1-on-1 Consultation / Review", "Dedicated technical review or advisory session"),
+            ("199", "Engineering Sprint / Retainer", "Milestone kickoff settled directly on-chain"),
+            ("499", "Custom Full Deployment", "End-to-end custom architecture & delivery"),
+        ]
+
+    tier_cards_html = ""
+    for idx, (t_amt, t_name, t_desc) in enumerate(tiers):
+        act_cls = "tier-card active" if idx == 0 else "tier-card"
+        tier_cards_html += (
+            f'<div class="{act_cls}" onclick="selectTier(this, {t_amt}, {json.dumps(t_name)})">'
+            f'<div class="t-price">${t_amt} <span>USD</span></div>'
+            f'<div class="t-name">{html.escape(t_name)}</div>'
+            f'<div class="t-desc">{html.escape(t_desc)}</div>'
+            f'</div>'
+        )
+
+    net_options = []
+    if clean_wal.startswith("0x") or is_studio:
+        net_options.extend([
+            ("base", "Base (USDC / USDT / ETH)"),
+            ("polygon", "Polygon (USDT / USDC / POL)"),
+            ("arbitrum", "Arbitrum One (USDC / USDT / ETH)"),
+            ("bsc", "BNB Smart Chain (USDT / USDC / BNB)"),
+            ("ethereum", "Ethereum Mainnet (USDC / USDT / ETH)"),
+        ])
+    if is_studio or (not clean_wal.startswith("0x") and not clean_wal.startswith("bc1")):
+        net_options.append(("solana", "Solana (USDC / USDT / SOL)"))
+    if is_studio or clean_wal.startswith(("bc1", "1", "3")):
+        net_options.append(("bitcoin", "Bitcoin (BTC Taproot / Bech32)"))
+
+    net_opts_html = "".join(
+        f'<option value="{k}" {"selected" if k == default_network else ""}>{html.escape(lbl)}</option>'
+        for k, lbl in net_options
+    )
+    funding_yml = f'custom: ["{base}/paygate/me/{wal_esc}"]'
+    footer_html = (
+        "Direct Non-Custodial On-Chain Storefront · Verifiable SHA-256 Settlement"
+        if white_label
+        else (
+            f'<div style="margin-bottom:8px;">Add 0%-fee crypto sponsorship to your GitHub repo (<code>.github/FUNDING.yml</code>): '
+            f'<code>{html.escape(funding_yml)}</code></div>'
+            f'Powered by <a href="{base}/paygate" style="color:#38bdf8;text-decoration:none;font-weight:700;">PayGate USDT</a> · '
+            f'<a href="{base}/paygate/me/0xYourWallet" style="color:#94a3b8;text-decoration:none;">Claim your free page</a> · '
+            f'<a href="{base}/paygate#upgrade" style="color:#fcd34d;text-decoration:none;font-weight:600;">Remove branding ($79 White-Label)</a>'
+        )
+    )
+    return f"""<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{brand_title} — Pay in Crypto (0% Fee)</title>
+<meta name="description" content="{brand_sub}"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root{{--bg:#050811;--surface:rgba(13,20,36,.82);--border:rgba(148,163,184,.16);--text:#f1f5f9;--muted:#94a3b8;}}
+  *{{box-sizing:border-box}} body{{margin:0;min-height:100vh;background:radial-gradient(920px 420px at 18% -10%,rgba(16,185,129,.15),transparent 60%),radial-gradient(820px 420px at 88% 0%,rgba(56,189,248,.12),transparent 58%),var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.55}}
+  .wrap{{max-width:860px;margin:0 auto;padding:36px 20px 72px}}
+  .card{{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px;backdrop-filter:blur(16px);box-shadow:0 24px 60px rgba(0,0,0,.45)}}
+  .pill{{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.42);color:#6ee7b7;font-size:.72rem;font-weight:800;letter-spacing:.05em}}
+  h1{{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(1.6rem,3.2vw,2.2rem);letter-spacing:-.03em;margin:12px 0 6px;color:#fff}}
+  .tier-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}
+  .tier-card{{background:rgba(5,8,17,.75);border:1px solid var(--border);border-radius:14px;padding:15px;cursor:pointer;transition:all .15s ease}}
+  .tier-card:hover{{border-color:rgba(56,189,248,.5)}}
+  .tier-card.active{{border-color:#10b981;background:rgba(16,185,129,.09);box-shadow:0 0 24px rgba(16,185,129,.14)}}
+  .t-price{{font-family:'Plus Jakarta Sans',sans-serif;font-size:1.55rem;font-weight:800;color:#fff}}
+  .t-price span{{font-size:.78rem;color:var(--muted);font-weight:600}}
+  .t-name{{font-weight:700;font-size:.88rem;color:#e2e8f0;margin-top:4px}}
+  .t-desc{{font-size:.76rem;color:var(--muted);margin-top:4px;line-height:1.4}}
+  label{{display:block;font-size:.78rem;font-weight:600;color:#cbd5e1;margin-top:12px}}
+  input,select{{width:100%;padding:11px 13px;border-radius:10px;border:1px solid rgba(148,163,184,.24);background:#020617;color:#f8fafc;font-size:.88rem;margin-top:5px;font-family:inherit;outline:none}}
+  input:focus,select:focus{{border-color:#38bdf8}}
+  .btn{{width:100%;margin-top:18px;padding:13px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#10b981,#06b6d4);color:#02160f;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:.96rem;cursor:pointer}}
+  code{{font-family:'JetBrains Mono',monospace;background:#020617;padding:2px 6px;border-radius:6px;color:#6ee7b7;font-size:.78rem;word-break:break-all}}
+</style></head><body>
+<div class="wrap">
+  <div class="card">
+    <span class="pill">0% PLATFORM FEE · DIRECT NON-CUSTODIAL SETTLEMENT</span>
+    <h1>{brand_title}</h1>
+    <p style="margin:0 0 8px;color:#94a3b8;font-size:.93rem;">{brand_sub}</p>
+    <div style="font-size:.78rem;color:#64748b;">Recipient Wallet: <code>{wal_esc}</code></div>
+
+    <div class="tier-grid">{tier_cards_html}</div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
+      <div>
+        <label>Amount (USD Equivalent)</label>
+        <input id="pAmt" type="number" step="0.5" min="1" value="{tiers[0][0]}"/>
+      </div>
+      <div>
+        <label>Item / Purpose</label>
+        <input id="pTitle" type="text" value="{html.escape(tiers[0][1])}"/>
+      </div>
+      <div>
+        <label>Settlement Network</label>
+        <select id="pNet">{net_opts_html}</select>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+      <div>
+        <label>Your @Telegram Handle or Email (for delivery / receipt)</label>
+        <input id="pContact" type="text" placeholder="@yourhandle or email@domain.com"/>
+      </div>
+      <div>
+        <label>GitHub Repo, Channel URL, or Message (optional)</label>
+        <input id="pNote" type="text" placeholder="owner/repo or project details"/>
+      </div>
+    </div>
+
+    <button class="btn" id="pBtn" onclick="launchStorefrontCheckout()">Proceed to 1-Click On-Chain Checkout -&gt;</button>
+    <div id="pErr" style="margin-top:10px;font-size:.84rem;color:#fca5a5;"></div>
+  </div>
+
+  <div style="margin-top:22px;text-align:center;font-size:.78rem;color:#64748b;line-height:1.6;">
+    {footer_html}
+  </div>
+</div>
+<script>
+const STORE_WALLET = {json.dumps(clean_wal)};
+const STUDIO_SOL = {json.dumps(StudioConfig.PHANTOM_SOL_ADDRESS or "")};
+const STUDIO_BTC = {json.dumps(StudioConfig.PHANTOM_BTC_ADDRESS or "")};
+const IS_STUDIO = {'true' if is_studio else 'false'};
+
+function selectTier(el, amt, name) {{
+  document.querySelectorAll('.tier-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pAmt').value = amt;
+  document.getElementById('pTitle').value = name;
+}}
+
+async function launchStorefrontCheckout() {{
+  const btn = document.getElementById('pBtn');
+  const err = document.getElementById('pErr');
+  err.textContent = '';
+  const amt = parseFloat(document.getElementById('pAmt').value || '0');
+  const title = document.getElementById('pTitle').value.trim() || 'Direct Crypto Payment';
+  const net = document.getElementById('pNet').value;
+  const contact = document.getElementById('pContact').value.trim();
+  const note = document.getElementById('pNote').value.trim();
+  if (!(amt > 0)) {{ err.textContent = 'Enter a valid USD amount.'; return; }}
+  let targetWallet = STORE_WALLET;
+  if (IS_STUDIO && net === 'solana' && STUDIO_SOL) targetWallet = STUDIO_SOL;
+  if (IS_STUDIO && net === 'bitcoin' && STUDIO_BTC) targetWallet = STUDIO_BTC;
+  btn.textContent = 'Preparing 7-Chain Checkout...';
+  const r = await fetch('/api/v1/paygate/invoices', {{
+    method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{
+      title: title,
+      amount_usd: amt,
+      network: net,
+      merchant_wallet: targetWallet,
+      customer_ref: contact,
+      billing_days: (IS_STUDIO && amt >= 9) ? (amt >= 79 ? 3650 : 30) : 0,
+      metadata: {{ buyer_contact: contact, buyer_note: note, issue_pass: IS_STUDIO }}
+    }})
+  }});
+  const d = await r.json();
+  if (!r.ok) {{
+    btn.textContent = 'Proceed to 1-Click On-Chain Checkout ->';
+    err.textContent = d.detail || d.message || 'Unable to create invoice.';
+    return;
+  }}
+  window.location.href = d.checkout_url;
 }}
 </script></body></html>"""
