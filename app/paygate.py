@@ -521,7 +521,7 @@ def verify_paygate_b2b_deposit(
         f"{order['order_id']} ({order['package_id']}) ${res.amount_usd:.2f} {res.token} via {res.network}",
     )
     notify_owner_b2b_event(
-        f"💰 PAYGATE B2B ORDER VERIFIED\nOrder: {order['order_id']}\nPackage: {order['package_name']}\nClient: {order['client_name']} ({order['contact_handle']})\nPaid: ${res.amount_usd:.2f} {res.token} on {res.network}\nTx: {tx}"
+        f"[PAYGATE B2B ORDER VERIFIED]\nOrder: {order['order_id']}\nPackage: {order['package_name']}\nClient: {order['client_name']} ({order['contact_handle']})\nPaid: ${res.amount_usd:.2f} {res.token} on {res.network}\nTx: {tx}"
     )
     return {
         "ok": True,
@@ -958,6 +958,24 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any], *, white_lab
             f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" class="tier-chip chip-amb">$79.00 · Lifetime White-Label</a>'
             '</div></div>'
         )
+    checkout_self_url = f"{base}/paygate/checkout/{inv_id}?network={net_raw}"
+    dapp_no_scheme = re.sub(r"^https?://", "", checkout_self_url)
+    enc_self_url = urllib.parse.quote(checkout_self_url, safe="")
+    enc_base_url = urllib.parse.quote(base, safe="")
+    mobile_wallet_links = ""
+    if not is_paid and net_raw != "bitcoin":
+        mm_link = f"https://metamask.app.link/dapp/{html.escape(dapp_no_scheme)}"
+        ph_link = f"https://phantom.app/ul/browse/{enc_self_url}?ref={enc_base_url}"
+        cb_link = f"https://go.cb-w.com/dapp?cb_url={enc_self_url}"
+        mobile_wallet_links = (
+            '<div id="mobileWalletBar" class="section-block" style="margin-top:-6px;">'
+            '<div class="kicker">PAYING ON MOBILE / TELEGRAM? OPEN DIRECTLY IN WALLET APP</div>'
+            '<div class="pill-row">'
+            + (f'<a class="net-pill" href="{mm_link}">Open in MetaMask App</a>' if net_raw != "solana" else "")
+            + f'<a class="net-pill" href="{ph_link}">Open in Phantom App</a>'
+            + (f'<a class="net-pill" href="{cb_link}">Open in Coinbase Wallet</a>' if net_raw != "solana" else "")
+            + '</div></div>'
+        )
     if not is_paid and net_raw in StudioConfig.EVM_CHAIN_IDS:
         btns = []
         if usdt_addr:
@@ -968,13 +986,14 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any], *, white_lab
             est_lbl = f"~{native_est:.6f} " if native_est > 0 else ""
             btns.append(f"""<button class="btn-secondary btn-vio" onclick="payNativeWithWallet()">1-Click Pay {est_lbl}{native_sym} (Native)</button>""")
         if btns:
-            one_click_btns = f"""<div class="action-grid">{''.join(btns)}</div>"""
+            one_click_btns = f"""<div class="action-grid">{''.join(btns)}</div>{mobile_wallet_links}"""
     elif not is_paid and net_raw == "solana":
         est_lbl = f"~{native_est:.5f} " if native_est > 0 else ""
         one_click_btns = (
             '<div class="action-grid">'
             f'<button class="btn-primary" onclick="paySolanaNativeWithWallet()">1-Click Pay {est_lbl}SOL (Phantom / Solflare)</button>'
             '</div>'
+            f'{mobile_wallet_links}'
         )
 
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=168x168&margin=6&data={urllib.parse.quote(wallet)}"
@@ -1216,13 +1235,39 @@ const MERCHANT_WALLET = '{wallet}';
 const CENTS_INT = {cents_int};
 const AMOUNT_USD = {amt_f};
 const TARGET_NETWORK = '{net_raw}';
+const EVM_CHAIN_PARAMS = {{
+  '0x2105': {{ chainId: '0x2105', chainName: 'Base', nativeCurrency: {{ name: 'Ether', symbol: 'ETH', decimals: 18 }}, rpcUrls: ['https://mainnet.base.org'], blockExplorerUrls: ['https://basescan.org'] }},
+  '0x89': {{ chainId: '0x89', chainName: 'Polygon Mainnet', nativeCurrency: {{ name: 'POL', symbol: 'POL', decimals: 18 }}, rpcUrls: ['https://polygon-rpc.com'], blockExplorerUrls: ['https://polygonscan.com'] }},
+  '0xa4b1': {{ chainId: '0xa4b1', chainName: 'Arbitrum One', nativeCurrency: {{ name: 'Ether', symbol: 'ETH', decimals: 18 }}, rpcUrls: ['https://arb1.arbitrum.io/rpc'], blockExplorerUrls: ['https://arbiscan.io'] }},
+  '0x38': {{ chainId: '0x38', chainName: 'BNB Smart Chain', nativeCurrency: {{ name: 'BNB', symbol: 'BNB', decimals: 18 }}, rpcUrls: ['https://bsc-dataseed.binance.org'], blockExplorerUrls: ['https://bscscan.com'] }},
+  '0x1': {{ chainId: '0x1', chainName: 'Ethereum Mainnet', nativeCurrency: {{ name: 'Ether', symbol: 'ETH', decimals: 18 }}, rpcUrls: ['https://cloudflare-eth.com'], blockExplorerUrls: ['https://etherscan.io'] }}
+}};
+
+async function ensureEvmChain() {{
+  const cur = String(await window.ethereum.request({{ method: 'eth_chainId' }}) || '').toLowerCase();
+  const want = TARGET_CHAIN_HEX.toLowerCase();
+  if (cur === want) return true;
+  try {{
+    await window.ethereum.request({{ method: 'wallet_switchEthereumChain', params: [{{ chainId: TARGET_CHAIN_HEX }}] }});
+  }} catch (swErr) {{
+    const code = (swErr && (swErr.code || (swErr.data && swErr.data.originalError && swErr.data.originalError.code)));
+    if (code === 4902 && EVM_CHAIN_PARAMS[want]) {{
+      await window.ethereum.request({{ method: 'wallet_addEthereumChain', params: [EVM_CHAIN_PARAMS[want]] }});
+    }} else {{
+      throw swErr;
+    }}
+  }}
+  const after = String(await window.ethereum.request({{ method: 'eth_chainId' }}) || '').toLowerCase();
+  if (after !== want) throw new Error('Please switch your wallet network to ' + TARGET_NETWORK.toUpperCase() + ' before sending.');
+  return true;
+}}
 
 async function paySolanaNativeWithWallet() {{
   const m = document.getElementById('invMsg');
   const provider = (window.phantom && window.phantom.solana) || window.solana || window.solflare;
   if (!provider) {{
     m.style.color = '#fca5a5';
-    m.textContent = 'No Solana browser wallet detected (Phantom/Solflare). Scan QR or transfer SOL/USDC manually and paste signature.';
+    m.textContent = 'No Solana browser extension detected. Tap "Open in Phantom App" above on mobile, or scan QR.';
     return;
   }}
   try {{
@@ -1264,7 +1309,7 @@ async function payNativeWithWallet() {{
   const m = document.getElementById('invMsg');
   if (!window.ethereum) {{
     m.style.color = '#fca5a5';
-    m.textContent = 'No browser wallet detected (MetaMask/Rabby/Phantom). Transfer manually above and paste TX hash.';
+    m.textContent = 'No browser wallet detected. Tap "Open in MetaMask App" or "Open in Phantom App" above on mobile, or scan QR.';
     return;
   }}
   try {{
@@ -1279,9 +1324,7 @@ async function payNativeWithWallet() {{
     }}
     const accs = await window.ethereum.request({{ method: 'eth_requestAccounts' }});
     const from = accs[0];
-    try {{
-      await window.ethereum.request({{ method: 'wallet_switchEthereumChain', params: [{{ chainId: TARGET_CHAIN_HEX }}] }});
-    }} catch (swErr) {{}}
+    await ensureEvmChain();
     m.textContent = 'Confirm ~' + q.native_amount + ' ' + q.native_symbol + ' ($' + AMOUNT_USD.toFixed(2) + ') in your wallet...';
     const txHash = await window.ethereum.request({{
       method: 'eth_sendTransaction',
@@ -1301,7 +1344,7 @@ async function payWithWallet(tokenContract, decimals, sym) {{
   const m = document.getElementById('invMsg');
   if (!window.ethereum) {{
     m.style.color = '#fca5a5';
-    m.textContent = 'No browser wallet detected (MetaMask/Rabby/Phantom). Transfer manually above and paste TX hash.';
+    m.textContent = 'No browser wallet detected. Tap "Open in MetaMask App" or "Open in Phantom App" above on mobile, or scan QR.';
     return;
   }}
   try {{
@@ -1309,9 +1352,7 @@ async function payWithWallet(tokenContract, decimals, sym) {{
     m.textContent = 'Connecting wallet & switching to {net}...';
     const accs = await window.ethereum.request({{ method: 'eth_requestAccounts' }});
     const from = accs[0];
-    try {{
-      await window.ethereum.request({{ method: 'wallet_switchEthereumChain', params: [{{ chainId: TARGET_CHAIN_HEX }}] }});
-    }} catch (swErr) {{}}
+    await ensureEvmChain();
     const amountRaw = BigInt(CENTS_INT) * (10n ** BigInt(Math.max(0, decimals - 2)));
     const recPad = MERCHANT_WALLET.toLowerCase().replace(/^0x/, '').padStart(64, '0');
     const amtPad = amountRaw.toString(16).padStart(64, '0');
@@ -1978,7 +2019,7 @@ def render_paygate_panel_html(base: str, bot: dict[str, Any], members: list[dict
   </div>
 
   <div class="card">
-    <h3 style="margin:0 0 8px;">⚙️ Configuracion del Bot y Wallet de Cobro</h3>
+    <h3 style="margin:0 0 8px;">Configuracion del Bot y Wallet de Cobro</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;">
       <div><label>Nombre</label><input id="cBrand" value="{brand}"/></div>
       <div><label>Red de cobro</label><select id="cNet">{net_opts}</select></div>
@@ -1994,12 +2035,12 @@ def render_paygate_panel_html(base: str, bot: dict[str, Any], members: list[dict
   </div>
 
   <div class="card">
-    <h3 style="margin:0 0 8px;">👥 Suscriptores y Pagos</h3>
+    <h3 style="margin:0 0 8px;">Suscriptores y Pagos</h3>
     <table><thead><tr><th>Usuario</th><th>Plan</th><th>Pago</th><th>Estado</th><th>Vence</th></tr></thead><tbody>{rows_html}</tbody></table>
   </div>
 
   <div class="card" style="border-color:#38bdf8;">
-    <h3 style="margin:0 0 6px;">👑 Desbloquear Miembros Ilimitados ($29 USDT Pro / $79 USDT Unico)</h3>
+    <h3 style="margin:0 0 6px;">Desbloquear Miembros Ilimitados ($29 USDT Pro / $79 USDT Unico)</h3>
     <p style="font-size:.85rem;color:#94a3b8;margin:0 0 10px;">Envia $29 o $79 (USDT/USDC) por Polygon/BSC/Arbitrum/Base a <code>{html.escape(StudioConfig.PHANTOM_EVM_ADDRESS)}</code> (o Solana <code>{html.escape(StudioConfig.PHANTOM_SOL_ADDRESS)}</code>) y pega tu Tx Hash abajo:</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <select id="uNet" style="flex:1;min-width:140px;"><option value="polygon">Polygon</option><option value="bsc">BSC</option><option value="arbitrum">Arbitrum</option><option value="base">Base</option><option value="solana">Solana</option></select>
@@ -2154,10 +2195,10 @@ def render_paygate_merchant_dashboard_html(
     )
 
     widget_snippet = html.escape(
-        f'<a data-paygate-merchant="{snippet_wal}" data-paygate-amount="29" data-paygate-network="base" data-paygate-title="Pro Access">\n'
-        "  Pay $29 USDC/USDT\n"
-        "</a>\n"
-        f'<script src="{base}/paygate/widget.js"></script>'
+        f'<button data-paygate-merchant="{snippet_wal}" data-paygate-amount="29" data-paygate-network="base" data-paygate-title="Pro Access" data-paygate-modal="1">\n'
+        "  Pay $29 USDC/USDT (In-Page Modal)\n"
+        "</button>\n"
+        f'<script src="{base}/paygate/widget.js" defer></script>'
     )
 
     return f"""<!DOCTYPE html><html lang="en"><head>
