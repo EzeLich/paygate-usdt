@@ -299,6 +299,22 @@ class StudioLedger:
         d["paid"] = bool(d["paid"])
         return d
 
+    def get_latest_audit_for_target(self, target_name: str) -> dict[str, Any] | None:
+        clean = (target_name or "").strip()
+        if not clean:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM audits WHERE lower(target_name) = lower(?) ORDER BY paid DESC, created_at DESC LIMIT 1",
+                (clean,),
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["report"] = json.loads(d.pop("report_json"))
+        d["paid"] = bool(d["paid"])
+        return d
+
     def mark_audit_paid(self, audit_id: str, tier: str, tx_hash: str) -> None:
         with self._connect() as conn:
             conn.execute(

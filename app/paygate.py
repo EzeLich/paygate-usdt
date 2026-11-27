@@ -944,20 +944,78 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any], *, white_lab
             f'<div class="pill-row">{"".join(pills)}</div>'
             '</div>'
         )
+    meta_inv = invoice.get("metadata") or {}
+    buyer_contact_esc = html.escape(str(meta_inv.get("buyer_contact") or ""))
+    buyer_note_esc = html.escape(str(meta_inv.get("buyer_note") or ""))
+    title_low = str(invoice.get("title") or "").lower()
+    is_b2b_inv = bool(
+        meta_inv.get("b2b_order_id")
+        or any(k in title_low for k in ("turnkey", "deposit", "custom", "vip gate", "agency"))
+        or (is_studio_inv and amt_f >= 90.0)
+    )
+    has_audit_target = bool(str(meta_inv.get("audit_id") or "").strip())
+    has_wd_target = isinstance(meta_inv.get("watchdog_spec"), dict) and bool(meta_inv.get("watchdog_spec"))
+
+    buyer_intake_html = ""
+    if not is_paid:
+        intake_border = "border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.06);padding:14px;border-radius:12px;" if is_b2b_inv else ""
+        intake_kicker = (
+            '<div class="kicker" style="color:#fbbf24;">STEP 1B · PROJECT KICKOFF CONTACT (REQUIRED FOR 24H DELIVERY)</div>'
+            if is_b2b_inv
+            else '<div class="kicker">OPTIONAL DELIVERY &amp; RECEIPT CONTACT (TELEGRAM / EMAIL / ORDER NOTE)</div>'
+        )
+        buyer_intake_html = (
+            f'<div class="section-block" style="{intake_border}">'
+            f'{intake_kicker}'
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">'
+            f'<input id="buyerContact" class="tx-input" value="{buyer_contact_esc}" placeholder="Your @telegram handle or email"/>'
+            f'<input id="buyerNote" class="tx-input" value="{buyer_note_esc}" placeholder="Repo URL, channel link, or fulfillment note"/>'
+            '</div>'
+            '<div style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+            '<button type="button" class="btn-secondary" onclick="saveBuyerInfo(false)">Save Delivery Info</button>'
+            f'<span id="buyerInfoMsg" style="font-size:.78rem;color:#94a3b8;">{"Saved to invoice (" + buyer_contact_esc + ")" if buyer_contact_esc else "Linked directly to your on-chain SHA-256 receipt."}</span>'
+            '</div></div>'
+        )
+
     if not is_paid and is_studio_inv:
         s_evm = StudioConfig.PHANTOM_EVM_ADDRESS or "0x4Ed4D0750453C027FA8398067d5af980Bcc9B6eD"
         t_net = net_raw if net_raw in ("base", "polygon", "arbitrum", "bsc", "ethereum") else "base"
-        tier_switcher_html = (
-            '<div class="delivery-banner">'
-            '<div class="delivery-kicker">INSTANT AUTOMATED ON-SCREEN DELIVERY · NO EMAIL OR SIGNUP</div>'
-            '<div class="delivery-sub">As soon as 1 block confirms (~3–5s on EVM/Solana), this screen automatically unlocks your <code>cg_live_...</code> API / White-Label Key and SHA-256 receipt. Quick-switch plan:</div>'
-            '<div class="tier-row">'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=0.5&network={t_net}&title=ChainGuard+24h+Micro+Unlock+Pass&issue_pass=1&billing_days=1" class="tier-chip chip-sky">$0.50 · 24h Test Pass</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=2&network={t_net}&title=ChainGuard+7-Day+Starter+MCP+Pass&issue_pass=1&billing_days=7" class="tier-chip chip-em">$2.00 · 7-Day Pass</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=ChainGuard+Unlimited+MCP+Pass&issue_pass=1&billing_days=30" class="tier-chip chip-vio">$9.00 · 30-Day Pro</a>'
-            f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" class="tier-chip chip-amb">$79.00 · Lifetime White-Label</a>'
-            '</div></div>'
-        )
+        if is_b2b_inv:
+            tier_switcher_html = (
+                '<div class="delivery-banner" style="border-color:rgba(245,158,11,.42);">'
+                '<div class="delivery-kicker" style="color:#fbbf24;">DONE-FOR-YOU ENGINEERING · 24H KICKOFF GUARANTEE</div>'
+                '<div class="delivery-sub">1. Enter your <strong>@telegram</strong> or <strong>email</strong> on the left.<br/>2. Settle the 50% deposit via any of the 7 supported networks.<br/>3. Instant SHA-256 kickoff receipt + direct engineering onboarding within hours.</div>'
+                '</div>'
+            )
+        elif has_audit_target:
+            aid_show = html.escape(str(meta_inv.get("audit_id") or ""))
+            tier_switcher_html = (
+                '<div class="delivery-banner" style="border-color:rgba(16,185,129,.42);">'
+                '<div class="delivery-kicker" style="color:#34d399;">INSTANT AUDIT &amp; BADGE UNLOCK · AUDIT ' + aid_show + '</div>'
+                '<div class="delivery-sub">Upon 1st block confirmation (~3–5s), this invoice automatically unlocks:<br/>- Emerald <strong>ChainGuard Verified</strong> README SVG Badge<br/>- Cryptographic SHA-256 Audit Certificate<br/>- Downloadable Grant &amp; Investor Remediation Dossier (.md)</div>'
+                '<div class="tier-row">'
+                f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=19&network={t_net}&title=ChainGuard+Verified+Badge&issue_pass=1&billing_days=30&audit_id={aid_show}" class="tier-chip chip-em">$19 · Verified Badge</a>'
+                f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=49&network={t_net}&title=Investor+Audit+Dossier+and+Patches&issue_pass=1&billing_days=90&audit_id={aid_show}" class="tier-chip chip-sky">$49 · Full Fix Kit + Dossier</a>'
+                '</div></div>'
+            )
+        elif has_wd_target:
+            tier_switcher_html = (
+                '<div class="delivery-banner" style="border-color:rgba(56,189,248,.42);">'
+                '<div class="delivery-kicker">24/7 AUTOMATED PROTOCOL &amp; DRAINER WATCHDOG</div>'
+                '<div class="delivery-sub">Locks SHA-256 script &amp; EIP-1967 proxy implementation baselines immediately upon on-chain settlement, polling every 5 minutes with instant webhook/Telegram alerts.</div>'
+                '</div>'
+            )
+        else:
+            tier_switcher_html = (
+                '<div class="delivery-banner">'
+                '<div class="delivery-kicker">INSTANT AUTOMATED ON-SCREEN DELIVERY · NO SIGNUP</div>'
+                '<div class="delivery-sub">As soon as 1 block confirms (~3–5s on EVM/Solana), this screen automatically issues your <code>cg_live_...</code> license key and SHA-256 receipt. Select plan:</div>'
+                '<div class="tier-row">'
+                f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=9&network={t_net}&title=PayGate+Cloud+Pro+30d&issue_pass=1&billing_days=30" class="tier-chip chip-em">$9 · Cloud Pro (30d)</a>'
+                f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=29&network={t_net}&title=ChainGuard+Team+Pro+90d&issue_pass=1&billing_days=90" class="tier-chip chip-sky">$29 · Team Pro (90d)</a>'
+                f'<a href="{base}/paygate/pay?merchant={s_evm}&amount=79&network={t_net}&title=PayGate+Lifetime+White-Label+License&issue_pass=1&billing_days=3650" class="tier-chip chip-amb" style="grid-column:span 2;">$79 · Lifetime White-Label + 25,000 Calls</a>'
+                '</div></div>'
+            )
     checkout_self_url = f"{base}/paygate/checkout/{inv_id}?network={net_raw}"
     dapp_no_scheme = re.sub(r"^https?://", "", checkout_self_url)
     enc_self_url = urllib.parse.quote(checkout_self_url, safe="")
@@ -1072,6 +1130,7 @@ def render_paygate_invoice_html(base: str, invoice: dict[str, Any], *, white_lab
               <div class="step"><span>3</span> Auto-Unlock</div>
             </div>
             {chain_switcher_html}
+            {buyer_intake_html}
             {one_click_btns}
             <div class="section-block">
               <label class="field-label">Direct Transfer Address · Send <strong>${amt} {asset_desc}</strong> on <strong>{net}</strong></label>
@@ -1373,6 +1432,32 @@ async function payWithWallet(tokenContract, decimals, sym) {{
 }}
 
 let _pollCount = 0;
+async function saveBuyerInfo(silent) {{
+  const cEl = document.getElementById('buyerContact');
+  const nEl = document.getElementById('buyerNote');
+  const mEl = document.getElementById('buyerInfoMsg');
+  if (!cEl && !nEl) return true;
+  const contact = cEl ? cEl.value.trim() : '';
+  const note = nEl ? nEl.value.trim() : '';
+  if (!contact && !note) {{
+    if (!silent && mEl) {{ mEl.style.color = '#fcd34d'; mEl.textContent = 'Enter a @telegram handle, email, or note first.'; }}
+    return false;
+  }}
+  try {{
+    const r = await fetch('/api/v1/paygate/invoices/{inv_id}/buyer-info', {{
+      method: 'POST', headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ buyer_contact: contact, buyer_note: note }})
+    }});
+    if (r.ok && mEl) {{
+      mEl.style.color = '#34d399';
+      mEl.textContent = 'Saved to invoice (' + (contact || 'note attached') + ')';
+    }}
+    return r.ok;
+  }} catch (e) {{
+    return false;
+  }}
+}}
+
 async function pollVerify() {{
   _pollCount += 1;
   const ok = await verifyInv(true);
@@ -1382,6 +1467,7 @@ async function pollVerify() {{
 }}
 
 async function verifyInv(silent) {{
+  await saveBuyerInfo(true);
   const m = document.getElementById('invMsg');
   const tx = document.getElementById('invTx').value.trim();
   if (!tx) {{ m.style.color = '#fca5a5'; m.textContent = 'Paste a valid transaction hash.'; return false; }}
@@ -1894,11 +1980,14 @@ async function createB2BOrder() {{
   msg.className = 'ok';
   msg.textContent = 'Order created: ' + d.order.order_id;
   const ord = d.order;
+  const chkLink = d.checkout_url || ('/paygate/pay?merchant=' + encodeURIComponent(d.wallets.evm) + '&amount=' + ord.min_deposit_usd + '&network=base&title=' + encodeURIComponent(ord.package_name + ' Deposit'));
   box.innerHTML = `<div class="card" style="background:rgba(2,6,23,.85);border-color:#f59e0b;">
     <div><strong>Order ID:</strong> <code>${{ord.order_id}}</code> · <strong>${{ord.package_name}}</strong></div>
-    <div style="margin-top:6px;font-size:.88rem;">Send <strong>$${{ord.min_deposit_usd}} USDT/USDC</strong> (50% deposit) or full <strong>$${{ord.full_price_usd}} USDT/USDC</strong>:</div>
-    <div style="margin-top:6px;font-size:.82rem;">EVM (Base / Polygon / Arbitrum / BSC / ETH): <code>${{d.wallets.evm}}</code></div>
-    <div style="margin-top:4px;font-size:.82rem;">Solana (SPL USDC/USDT/SOL): <code>${{d.wallets.solana}}</code></div>
+    <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <a class="btn" href="${{chkLink}}">Open 7-Chain Deposit Checkout ($${{ord.min_deposit_usd}}) -&gt;</a>
+      <span style="font-size:.82rem;color:#94a3b8;">Supports MetaMask, Phantom, QR &amp; auto-detection across Base, Polygon, Arbitrum, BSC, ETH, Solana &amp; BTC.</span>
+    </div>
+    <div style="margin-top:10px;font-size:.82rem;">Or verify manual TX directly — EVM: <code>${{d.wallets.evm}}</code> · Solana: <code>${{d.wallets.solana}}</code></div>
     <div style="display:grid;grid-template-columns:160px 1fr auto;gap:8px;margin-top:10px;">
       <select id="b2bNet"><option value="base">Base</option><option value="polygon">Polygon</option><option value="bsc">BSC BEP20</option><option value="arbitrum">Arbitrum</option><option value="solana">Solana</option><option value="ethereum">Ethereum</option></select>
       <input id="b2bTx" placeholder="Paste TX Hash (0x... or Solana signature)"/>
@@ -2139,10 +2228,12 @@ def render_paygate_merchant_dashboard_html(
         exp_prefix = _EXPLORER_TX_URLS.get(net_raw, "")
         tx_link = f'<a href="{html.escape(exp_prefix + tx)}" target="_blank" style="color:#38bdf8;">Explorer</a>' if (tx and exp_prefix) else "-"
         status_color = "#10b981" if status_raw == "paid" else ("#f59e0b" if status_raw == "pending" else "#94a3b8")
+        inv_meta = inv.get("metadata") or {}
+        b_contact = html.escape(str(inv_meta.get("buyer_contact") or inv_meta.get("customer_ref") or "-"))
         rows_html += (
             f"<tr>"
             f"<td><code>{inv_id_esc}</code></td>"
-            f"<td>{title_esc}</td>"
+            f"<td>{title_esc}<div style='font-size:.75rem;color:#94a3b8;'>Buyer: {b_contact}</div></td>"
             f"<td><strong>${amt_val:.2f}</strong></td>"
             f"<td>{net_esc}</td>"
             f"<td style='color:{status_color};font-weight:800;'>{html.escape(status_raw.upper())}</td>"
