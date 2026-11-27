@@ -1,0 +1,6 @@
+{
+  "name": "paygate-x402-guard",
+  "version": "2.9.1",
+  "description": "Zero-network L0 payment config guard for Claude Code: blocks accidental 64-hex private keys in merchant/payTo fields and prevents routing x402 or crypto checkouts to EVM burn addresses.",
+  "author": { "name": "Ezequiel Lech" }
+}

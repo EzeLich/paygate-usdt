@@ -1,0 +1,4 @@
+{
+  "description": "PayGate L0 x402 and Checkout Guard: inspects Bash commands in-memory to prevent passing private keys as merchant wallets or routing checkout payouts to burn addresses. Needs Claude Code 2.1.287 or later.",
+  "modules": ["./register.ts"]
+}

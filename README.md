@@ -52,6 +52,17 @@ jobs:
 
 ---
 
+## Claude Code Function Hook Mod (`L0` Payment & x402 Config Guard)
+
+Run `paygate-x402-guard` natively inside Claude Code `2.1.287+` (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`) with `L0` zero-network reach to prevent passing 64-hex private keys into `merchant`/`payTo` fields or routing checkouts to EVM burn addresses:
+
+```bash
+claude plugin validate .claude-plugin/plugin.json
+claude --plugin-dir .
+```
+
+---
+
 ## Why Builders Choose PayGate USDT Over Custodial Processors
 
 | Feature | PayGate USDT v2.9.0 | Custodial Gateways / Whop / InviteMember |
